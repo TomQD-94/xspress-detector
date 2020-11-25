@@ -3,8 +3,8 @@
 
 #include "version.h"
 #include "Frame.h"
-#include "../../../include/xspress3Definitions.h"
-#include "../../../include/xspress3MagicNumbers.h"
+#include "xspress3Definitions.h"
+#include "xspress3MagicNumbers.h"
 
 #define XSPRESS_DATA_TYPE raw_32bit // 1 UINT16
 #define XSP3_SW_NUM_SCALERS 9

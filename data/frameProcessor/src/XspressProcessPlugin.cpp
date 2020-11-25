@@ -204,15 +204,15 @@ namespace FrameProcessor {
         frame->set_image_offset(sizeof(FrameHeader));
         frame->set_image_size(mcaDataSize);
         frame->set_frame_number(header_->frameNumber);
+        
+        frame->meta_data().set_acquisition_ID("");
 
         FrameProcessor::DataType scaDataType = this->dtcEnabled ? raw_64bit : XSPRESS_DATA_TYPE;
 
         dimensions_t scaler_dims;
         scaler_dims.push_back(header_->numChannels);
         scaler_dims.push_back(XSP3_SW_NUM_SCALERS);
-        FrameMetaData scaler_metadata(header_->frameNumber, "sca",
-            scaDataType, frame->meta_data().get_acquisition_ID(),
-            scaler_dims);
+        FrameMetaData scaler_metadata(header_->frameNumber, "sca", scaDataType, "", scaler_dims);
         // TODO: FIX, how can we allocate or request new blocks?	
         size_t scalerSize = XSP3_SW_NUM_SCALERS*header_->numChannels * (this->dtcEnabled ? sizeof(double) : sizeof(uint32_t));
         boost::shared_ptr <Frame> scaler_frame(new DataBlockFrame(scaler_metadata, scalerSize));
