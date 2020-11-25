@@ -1,0 +1,7 @@
+[
+  {
+    "decoder_type": "Sim",
+    "decoder_path": "/dls_sw/work/common/src/odin-sim-detector/prefix/lib",
+    "rx_ports": "1515"
+  }
+]

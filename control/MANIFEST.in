@@ -1,0 +1,2 @@
+include versioneer.py
+include xspress/_version.py
