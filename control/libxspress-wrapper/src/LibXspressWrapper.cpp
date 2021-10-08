@@ -28,10 +28,27 @@ LibXspressWrapper::LibXspressWrapper(bool simulation) :
     logger_(log4cxx::Logger::getLogger("Xspress.LibXspressWrapper")),
     simulated_(simulation),
     connected_(false),
+    reconnect_required_(false),
     xsp_handle_(-1),
+    xsp_num_cards_(0),
+    xsp_num_tf_(0),
+    xsp_base_IP_(""),
+    xsp_max_channels_(0),
+    xsp_debug_(0),
     xsp_config_path_(""),
+    xsp_config_save_path_(""),
     xsp_use_resgrades_(false),
-    xsp_dtc_params_updated_(false)
+    xsp_num_aux_data_(0),
+    xsp_run_flags_(0),
+    xsp_dtc_params_updated_(false),
+    xsp_dtc_energy_(0.0),
+    xsp_clock_period_(0),
+    xsp_trigger_mode_(0),
+    xsp_invert_f0_(0),
+    xsp_invert_veto_(0),
+    xsp_debounce_(0),
+    xsp_exposure_time_(0.0),
+    xsp_frames_(0)
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing LibXspressWrapper");
@@ -49,6 +66,11 @@ void LibXspressWrapper::setErrorString(const std::string& error)
 {
   LOG4CXX_DEBUG_LEVEL(1, logger_, error);
   error_string_ = error;
+}
+
+std::string LibXspressWrapper::getErrorString()
+{
+  return error_string_;
 }
 
 void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code)
@@ -149,6 +171,35 @@ int LibXspressWrapper::checkConnected()
 
 }
 
+/**
+ * Save the system settings for the xspress3 system. 
+ * This simply calls xsp3_save_settings().
+ */
+int LibXspressWrapper::saveSettings()
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = 0;
+
+  LOG4CXX_INFO(logger_, "Saving Xspress3 settings. This calls xsp3_save_settings().");
+
+  if (!connected_){
+    setErrorString("Cannot save settings, not connected");
+    status = XSP_STATUS_ERROR;
+  } else if (xsp_config_save_path_ == ""){
+    setErrorString("Cannot save settings, no config save path set");
+    status = XSP_STATUS_ERROR;
+  } else {
+    xsp_status = xsp3_save_settings(xsp_handle_, const_cast<char *>(xsp_config_save_path_.c_str()));
+    if (xsp_status != XSP3_OK) {
+      checkErrorCode("xsp3_save_settings", xsp_status);
+      status = XSP_STATUS_ERROR;
+    } else {
+      LOG4CXX_INFO(logger_, "Saved Configuration.");
+    }
+  }
+  return status;
+}
+
 int LibXspressWrapper::restoreSettings()
 {
   int status = XSP_STATUS_OK;
@@ -219,37 +270,35 @@ int LibXspressWrapper::restoreSettings()
       checkErrorCode("xsp3_set_run_flags", xsp_status);
       status = XSP_STATUS_ERROR;
     }
-/*
+
     // Read existing SCA params
-    if (status == asynSuccess) {
-        status = readSCAParams();
+    if (status == XSP_STATUS_OK){
+      status = readSCAParams();
     }
 
     // Read the DTC parameters
-    if (status == asynSuccess) {
-        status = readDTCParams();
+    if (status == XSP_STATUS_OK){
+      status = readDTCParams();
     }
 
-    // We ensure here that DTC energy is set between IOC restart and frame
+    // We ensure here that DTC energy is set between application restart and frame
     // acquisition; otherwise libxspress3 would use an unspecified DTC energy.
-    double dtcEnergy;
-    getDoubleParam(xsp3DtcEnergyParam, &dtcEnergy);
-    xsp3_status = xsp3_setDeadtimeCalculationEnergy(xsp3_handle_, dtcEnergy);
-    if (xsp3_status != XSP3_OK) {
-        checkStatus(xsp3_status, "xsp3_setDeadtimeCalculationEnergy", functionName);
-        status = asynError;
+    xsp_status = xsp3_setDeadtimeCalculationEnergy(xsp_handle_, xsp_dtc_energy_);
+    if (xsp_status != XSP3_OK) {
+        checkErrorCode("xsp3_setDeadtimeCalculationEnergy", xsp_status);
+        status = XSP_STATUS_ERROR;
     }
 
-    double clock_period = xsp3_get_clock_period(xsp3_handle_, 0);
-    setDoubleParam(xsp3ClockPeriodParam, clock_period);
-    callParamCallbacks();
-    setIntegerParam(xsp3ReconnectRequiredParam, status != asynSuccess);
+    // Read the clock period
+    xsp_clock_period_ = xsp3_get_clock_period(xsp_handle_, 0);
+
+    // Set the reconnect flag if something has gone wrong with this configuration
+    reconnect_required_ = (status != XSP_STATUS_OK);
 
     // Re-apply trigger mode setting, since may have been overridden by restored config
-    this->collectParamsAndSetTriggerMode();
-*/
-    return status;
+    status = setTriggerMode();
 
+    return status;
   }
 }
 
@@ -383,6 +432,163 @@ int LibXspressWrapper::readDTCParams()
   return status;
 }
 
+/**
+ * Write new dead time correction (DTC) parameters for each channel.
+ */
+int LibXspressWrapper::writeDTCParams()
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = 0;
+  int xsp_dtc_flags = 0;
+  double xsp_dtc_all_event_off = 0.0;
+  double xsp_dtc_all_event_grad = 0.0;
+  double xsp_dtc_all_event_rate_off = 0.0;
+  double xsp_dtc_all_event_rate_grad = 0.0;
+  double xsp_dtc_in_window_off = 0.0;
+  double xsp_dtc_in_window_grad = 0.0;
+  double xsp_dtc_in_window_rate_off = 0.0;
+  double xsp_dtc_in_window_rate_grad = 0.0;
+
+  for (int chan = 0; chan < xsp_max_channels_; chan++) {
+
+    xsp_dtc_flags = pDTCi_[chan * XSP3_NUM_DTC_INT_PARAMS + XSP3_DTC_FLAGS];
+    xsp_dtc_all_event_off = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AEO];
+    xsp_dtc_all_event_grad = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AEG];
+    xsp_dtc_all_event_rate_off = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AERO];
+    xsp_dtc_all_event_rate_grad = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AERG];
+    xsp_dtc_in_window_off = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWO];
+    xsp_dtc_in_window_grad = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWG];
+    xsp_dtc_in_window_rate_off = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWRO];
+    xsp_dtc_in_window_rate_grad = pDTCd_[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWRG];
+
+    xsp_status = xsp3_setDeadtimeCorrectionParameters2(xsp_handle_,
+                                                       chan,
+                                                       xsp_dtc_flags,
+                                                       xsp_dtc_all_event_off,
+                                                       xsp_dtc_all_event_grad,
+                                                       xsp_dtc_all_event_rate_off,
+                                                       xsp_dtc_all_event_rate_grad,
+                                                       xsp_dtc_in_window_off,
+                                                       xsp_dtc_in_window_grad,
+                                                       xsp_dtc_in_window_rate_off,
+                                                       xsp_dtc_in_window_rate_grad);
+    if (xsp_status < XSP3_OK) {
+      checkErrorCode("xsp3_setDeadtimeCorrectionParameters", xsp_status);
+      status = XSP_STATUS_ERROR;
+    }
+  }
+  return status;
+}
+
+int LibXspressWrapper::setTriggerMode()
+{
+  int status = XSP_STATUS_OK;
+  Xsp3Timing xsp_trigger_mode = {0};
+  int itfg_trig_mode;
+  int xsp_status = XSP3_OK;
+
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Set Trigger Mode.");  
+
+  status = mapTimeFrameSource(&xsp_trigger_mode, &itfg_trig_mode);
+  if (xsp_trigger_mode.t_src == XSP3_GTIMA_SRC_INTERNAL) {
+    xsp_status = xsp3_itfg_setup(xsp_handle_, 
+                                 0,
+                                 xsp_frames_,
+                                 (u_int32_t)floor(xsp_exposure_time_ / xsp_clock_period_ + 0.5),
+                                 itfg_trig_mode,
+                                 XSP3_ITFG_GAP_MODE_1US);
+    if (xsp_status != XSP3_OK) {
+      checkErrorCode("xsp3_itfg_setup", xsp_status);
+      status = XSP_STATUS_ERROR;
+    }
+  }
+  if (status != XSP_STATUS_ERROR){
+    xsp_status = xsp3_set_timing(xsp_handle_, &xsp_trigger_mode);
+    if (xsp_status != XSP3_OK) {
+      checkErrorCode("xsp3_set_timing", xsp_status);
+      status = XSP_STATUS_ERROR;
+    }
+  }
+  return status;
+}
+
+/**
+ * Function to map the database timeframe source
+ * value to the macros defined by the API.
+ * @param mode The database value
+ * @param apiMode This returns the correct value for the API
+ * @return asynStatus
+ */
+int LibXspressWrapper::mapTimeFrameSource(Xsp3Timing *api_mode, int *api_itfg_mode)
+{
+  int status = XSP_STATUS_OK;
+
+  *api_itfg_mode = -1;
+
+  switch (xsp_trigger_mode_) {
+    case TM_SOFTWARE_START_STOP:
+      api_mode->t_src = XSP3_GTIMA_SRC_FIXED;
+      break;
+    case TM_SOFTWARE:
+      api_mode->t_src = XSP3_GTIMA_SRC_INTERNAL;
+      *api_itfg_mode = XSP3_ITFG_TRIG_MODE_SOFTWARE;
+      break;
+    case TM_TTL_RISING_EDGE:
+      api_mode->t_src = XSP3_GTIMA_SRC_INTERNAL;
+      *api_itfg_mode = XSP3_ITFG_TRIG_MODE_HARDWARE;
+      break;
+    case TM_BURST:
+      api_mode->t_src = XSP3_GTIMA_SRC_INTERNAL;
+      *api_itfg_mode = XSP3_ITFG_TRIG_MODE_BURST;
+      break;
+    case TM_IDC:
+      api_mode->t_src = XSP3_GTIMA_SRC_IDC;
+      break;
+    case TM_TTL_VETO_ONLY:
+      api_mode->t_src = XSP3_GTIMA_SRC_TTL_VETO_ONLY;
+      break;
+    case TM_TTL_BOTH:
+      api_mode->t_src = XSP3_GTIMA_SRC_TTL_BOTH;
+      break;
+    case TM_LVDS_VETO_ONLY:
+      api_mode->t_src = XSP3_GTIMA_SRC_LVDS_VETO_ONLY;
+      break;
+    case TM_LVDS_BOTH:
+      api_mode->t_src = XSP3_GTIMA_SRC_LVDS_BOTH;
+      break;
+
+    default:
+      LOG4CXX_ERROR(logger_, "Mapping an unknown timeframe source. mode: " << xsp_trigger_mode_);
+      status = XSP_STATUS_ERROR;
+      break;
+  }
+
+  if (xsp_invert_f0_){
+    api_mode->inv_f0 = 1;
+  }
+  if (xsp_invert_veto_){
+    api_mode->inv_veto = 1;
+  }
+  api_mode->debounce = xsp_debounce_;
+
+  return status;
+}
+
+/**
+ * Function to return the current number of frames read
+ * @param out number of frames read
+ * @return status
+ */
+int LibXspressWrapper::getNumFramesRead(int64_t *furthest_frame)
+{
+  Xsp3ErrFlag flags;
+  int xsp_status = xsp3_scaler_check_progress_details(xsp_handle_, &flags, 0, furthest_frame);
+  if (xsp_status < XSP3_OK) {
+    checkErrorCode("xsp3_dma_check_desc", xsp_status);
+  }
+  return xsp_status;
+}
+
 void LibXspressWrapper::setXspNumCards(int num_cards)
 {
   xsp_num_cards_ = num_cards;
@@ -434,9 +640,29 @@ void LibXspressWrapper::setXspDebug(int debug)
   xsp_debug_ = debug;
 }
 
-int LibXspressWrapper::getDebug()
+int LibXspressWrapper::getXspDebug()
 {
   return xsp_debug_;
+}
+
+void LibXspressWrapper::setXspConfigPath(const std::string& config_path)
+{
+  xsp_config_path_ = config_path;
+}
+
+std::string LibXspressWrapper::getXspConfigPath()
+{
+  return xsp_config_path_;
+}
+
+void LibXspressWrapper::setXspConfigSavePath(const std::string& config_save_path)
+{
+  xsp_config_save_path_ = config_save_path;
+}
+
+std::string LibXspressWrapper::getXspConfigSavePath()
+{
+  return xsp_config_save_path_;
 }
 
 void LibXspressWrapper::setXspUseResgrades(bool use)
@@ -457,6 +683,76 @@ void LibXspressWrapper::setXspRunFlags(int flags)
 int LibXspressWrapper::getXspRunFlags()
 {
   return xsp_run_flags_;
+}
+
+void LibXspressWrapper::setXspDTCEnergy(double energy)
+{
+  xsp_dtc_energy_ = energy;
+}
+
+double LibXspressWrapper::getXspDTCEnergy()
+{
+  return xsp_dtc_energy_;
+}
+
+void LibXspressWrapper::setXspTriggerMode(int mode)
+{
+  xsp_trigger_mode_ = mode;
+}
+
+int LibXspressWrapper::getXspTriggerMode()
+{
+  return xsp_trigger_mode_;
+}
+
+void LibXspressWrapper::setXspInvertF0(int invert_f0)
+{
+  xsp_invert_f0_ = invert_f0;
+}
+
+int LibXspressWrapper::getXspInvertF0()
+{
+  return xsp_invert_f0_;
+}
+
+void LibXspressWrapper::setXspInvertVeto(int invert_veto)
+{
+  xsp_invert_veto_ = invert_veto;
+}
+
+int LibXspressWrapper::getXspInvertVeto()
+{
+  return xsp_invert_veto_;
+}
+
+void LibXspressWrapper::setXspDebounce(int debounce)
+{
+  xsp_debounce_ = debounce;
+}
+
+int LibXspressWrapper::getXspDebounce()
+{
+  return xsp_debounce_;
+}
+
+void LibXspressWrapper::setXspExposureTime(double exposure)
+{
+  xsp_exposure_time_ = exposure;
+}
+
+double LibXspressWrapper::getXspExposureTime()
+{
+  return xsp_exposure_time_;
+}
+
+void LibXspressWrapper::setXspFrames(int frames)
+{
+  xsp_frames_ = frames;
+}
+
+int LibXspressWrapper::getXspFrames()
+{
+  return xsp_frames_;
 }
 
 } /* namespace Xspress */

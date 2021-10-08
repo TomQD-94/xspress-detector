@@ -37,6 +37,17 @@ using namespace log4cxx::helpers;
 #define XSP3_DTC_IWRO                       6
 #define XSP3_DTC_IWRG                       7
 
+// Trigger mode enum valeus
+#define TM_SOFTWARE                         0
+#define TM_TTL_RISING_EDGE                  1
+#define TM_BURST                            2
+#define TM_TTL_VETO_ONLY                    3
+#define TM_SOFTWARE_START_STOP              4
+#define TM_IDC                              5
+#define TM_TTL_BOTH                         6
+#define TM_LVDS_VETO_ONLY                   7
+#define TM_LVDS_BOTH                        8
+
 namespace Xspress
 {
 
@@ -55,12 +66,18 @@ public:
   LibXspressWrapper(bool simulation=false);
   virtual ~LibXspressWrapper();
   void setErrorString(const std::string& error);
+  std::string getErrorString();
   void checkErrorCode(const std::string& prefix, int code);
   int connect();
   int checkConnected();
+  int saveSettings();
   int restoreSettings();
   int readSCAParams();
   int readDTCParams();
+  int writeDTCParams();
+  int setTriggerMode();
+  int mapTimeFrameSource(Xsp3Timing *api_mode, int *api_itfg_mode);
+  int getNumFramesRead(int64_t *furthest_frame);
 
   // Getter and Setters
   void setXspNumCards(int num_cards);
@@ -72,11 +89,29 @@ public:
   void setXspMaxChannels(int max_channels);
   int getXspMaxChannels();
   void setXspDebug(int debug);
-  int getDebug();
+  int getXspDebug();
+  void setXspConfigPath(const std::string& config_path);
+  std::string getXspConfigPath();
+  void setXspConfigSavePath(const std::string& config_save_path);
+  std::string getXspConfigSavePath();
   void setXspUseResgrades(bool use);
   bool getXspUseResgrades();
   void setXspRunFlags(int flags);
   int getXspRunFlags();
+  void setXspDTCEnergy(double energy);
+  double getXspDTCEnergy();
+  void setXspTriggerMode(int mode);
+  int getXspTriggerMode();
+  void setXspInvertF0(int invert_f0);
+  int getXspInvertF0();
+  void setXspInvertVeto(int invert_veto);
+  int getXspInvertVeto();
+  void setXspDebounce(int debounce);
+  int getXspDebounce();
+  void setXspExposureTime(double exposure);
+  double getXspExposureTime();
+  void setXspFrames(int frames);
+  int getXspFrames();
   
   static const int runFlag_MCA_SPECTRA_;
   static const int runFlag_SCALERS_ONLY_;
@@ -89,6 +124,8 @@ private:
 
   /** Connected flag */
   bool                          connected_;
+  /** Reconnection required flag */
+  bool                          reconnect_required_;
   /** Handle used by the libxspress library */
   int                           xsp_handle_;
   /** Number of XSPRESS cards */
@@ -103,6 +140,8 @@ private:
   int                           xsp_debug_;
   /** Path to Xspress configuration files */
   std::string                   xsp_config_path_;
+  /** Path to Xspress configuration files */
+  std::string                   xsp_config_save_path_;
   /** Use resgrades? */
   bool                          xsp_use_resgrades_;
   /** Number of auxiliary data items */
@@ -111,6 +150,22 @@ private:
   int                           xsp_run_flags_;
   /** Have the DTC params been updated */
   bool                          xsp_dtc_params_updated_;
+  /** DTC energy */
+  double                        xsp_dtc_energy_;
+  /** Clock period */
+  double                        xsp_clock_period_;
+  /** Trigger mode */
+  int                           xsp_trigger_mode_;
+  /** Invert f0 */
+  int                           xsp_invert_f0_;
+  /** Invert veto */
+  int                           xsp_invert_veto_;
+  /** Debounce */
+  int                           xsp_debounce_;
+  /** Exposure time */
+  double                        xsp_exposure_time_;
+  /** Number of frames */
+  int                           xsp_frames_;
 
   std::vector<uint32_t>         xsp_chan_sca5_low_lim_;
   std::vector<uint32_t>         xsp_chan_sca5_high_lim_;

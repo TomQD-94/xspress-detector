@@ -20,6 +20,7 @@
 #include "IpcReactor.h"
 #include "IpcChannel.h"
 #include "IpcMessage.h"
+#include "LibXspressWrapper.h"
 
 using namespace log4cxx;
 using namespace log4cxx::helpers;
@@ -45,6 +46,8 @@ public:
   void provideStatus(OdinData::IpcMessage& reply);
   void provideVersion(OdinData::IpcMessage& reply);
   void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
+  void configureXsp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
+  void configureCommand(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void requestConfiguration(OdinData::IpcMessage& reply);
   void resetStatistics(OdinData::IpcMessage& reply);
   void run();
@@ -60,6 +63,29 @@ private:
 
   /** Configuration constant for control socket endpoint **/
   static const std::string CONFIG_CTRL_ENDPOINT;
+
+  /** Configuration constants for parameters **/
+  static const std::string CONFIG_XSP;
+  static const std::string CONFIG_XSP_NUM_CARDS;
+  static const std::string CONFIG_XSP_NUM_TF;
+  static const std::string CONFIG_XSP_BASE_IP;
+  static const std::string CONFIG_XSP_MAX_CHANNELS;
+  static const std::string CONFIG_XSP_DEBUG;
+  static const std::string CONFIG_XSP_CONFIG_PATH;
+  static const std::string CONFIG_XSP_CONFIG_SAVE_PATH;
+  static const std::string CONFIG_XSP_USE_RESGRADES;
+  static const std::string CONFIG_XSP_RUN_FLAGS;
+  static const std::string CONFIG_XSP_DTC_ENERGY;
+  static const std::string CONFIG_XSP_TRIGGER_MODE;
+  static const std::string CONFIG_XSP_INVERT_F0;
+  static const std::string CONFIG_XSP_INVERT_VETO;
+  static const std::string CONFIG_XSP_DEBOUNCE;
+  static const std::string CONFIG_XSP_EXPOSURE_TIME;
+  static const std::string CONFIG_XSP_FRAMES;
+ 
+  /** Configuration constants for commands **/
+  static const std::string CONFIG_CMD;
+  static const std::string CONFIG_CMD_CONNECT;
 
   void setupControlInterface(const std::string& ctrlEndpointString);
   void closeControlInterface();
@@ -92,6 +118,8 @@ private:
   OdinData::IpcContext&                                           ipc_context_;
   /** IpcChannel for control messages */
   OdinData::IpcChannel                                            ctrlChannel_;
+  /** The Xspress hardware wrapper object */
+  LibXspressWrapper                                               xsp_;
 };
 
 } /* namespace Xspress */
