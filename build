@@ -1,0 +1,48 @@
+PROGRAM=xspress-detector
+VERSION=0.0.1
+TAR_FILE=none
+
+build()
+{
+    # Build server HACK alert!
+    # This is to unwind a change that the build server always appear to apply
+    # to configure/RELEASE: it stuffs the TOOLS_SUPPORT macro in there regardless of
+    # whether or not it is already there! This causes the git repo to have local changes
+    # and in turn this causes the python build to create an egg with a 'dirty' version.
+#    git checkout -- ../configure/RELEASE
+    
+#    ${CMAKE_BIN}/cmake \
+#                       -DBoost_NO_BOOST_CMAKE=ON \
+#                       -DODINDATA_ROOT_DIR=${ODIN_DATA_PREFIX} \
+#                       -DZEROMQ_ROOTDIR=${ZEROMQ_PREFIX} \
+#                       -DLOG4CXX_ROOT_DIR=${LOG4CXX_PREFIX} \
+#                       -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON \
+#                       -DCMAKE_INSTALL_PREFIX=${TARGET_PREFIX} \
+#                       ${BUILD_SCRIPT_DIR}/data
+#    make VERBOSE=1 && make install
+    
+    ${CMAKE_BIN}/cmake \
+                       -DBoost_NO_BOOST_CMAKE=ON \
+                       -DODINDATA_ROOT_DIR=${ODIN_DATA_PREFIX} \
+                       -DZEROMQ_ROOTDIR=${ZEROMQ_PREFIX} \
+                       -DLOG4CXX_ROOT_DIR=${LOG4CXX_PREFIX} \
+                       -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON \
+                       -DCMAKE_INSTALL_PREFIX=${TARGET_PREFIX} \
+                       ${BUILD_SCRIPT_DIR}/control/libxspress-wrapper
+    make VERBOSE=1 && make install
+    
+    # Removing pesky dist dir just in case a previous build is left over
+#    rm -rf $BUILD_SCRIPT_DIR/control/dist 
+#
+#    python_depends ENUM CONFIGPARSER ODIN_CONTROL ODIN_DATA
+#    
+#    export BOOST_ROOT=$BOOST_PREFIX
+#    export SRC=$BUILD_SCRIPT_DIR/control
+#    setuptools_build # Defined in Python/CONFIG
+#
+#    # Install the static html files for the odin control server
+#    mkdir ${TARGET_PREFIX}/html
+#    cp -r $BUILD_SCRIPT_DIR/control/static ${TARGET_PREFIX}/html/
+}
+
+
