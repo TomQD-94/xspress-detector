@@ -40,6 +40,8 @@ const std::string XspressController::CONFIG_XSP_FRAMES            = "frames";
 
 const std::string XspressController::CONFIG_CMD                   = "cmd";
 const std::string XspressController::CONFIG_CMD_CONNECT           = "connect";
+const std::string XspressController::CONFIG_CMD_SAVE              = "save";
+const std::string XspressController::CONFIG_CMD_RESTORE           = "restore";
 
 /** Construct a new XspressController class.
  *
@@ -381,7 +383,15 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
   // Check for a connect command
   if (config.has_param(XspressController::CONFIG_CMD_CONNECT)){
     LOG4CXX_DEBUG_LEVEL(1, logger_, "connect command executing");
+    // Attempt connection to the hardware
     int status = xsp_.connect();
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    } else {
+      // Attempt to restore the settings
+      status = xsp_.restoreSettings();
+    }
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());

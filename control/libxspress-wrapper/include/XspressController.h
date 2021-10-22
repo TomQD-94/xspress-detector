@@ -20,7 +20,7 @@
 #include "IpcReactor.h"
 #include "IpcChannel.h"
 #include "IpcMessage.h"
-#include "LibXspressWrapper.h"
+#include "XspressDetector.h"
 
 using namespace log4cxx;
 using namespace log4cxx::helpers;
@@ -86,6 +86,8 @@ private:
   /** Configuration constants for commands **/
   static const std::string CONFIG_CMD;
   static const std::string CONFIG_CMD_CONNECT;
+  static const std::string CONFIG_CMD_SAVE;
+  static const std::string CONFIG_CMD_RESTORE;
 
   void setupControlInterface(const std::string& ctrlEndpointString);
   void closeControlInterface();
@@ -119,7 +121,7 @@ private:
   /** IpcChannel for control messages */
   OdinData::IpcChannel                                            ctrlChannel_;
   /** The Xspress hardware wrapper object */
-  LibXspressWrapper                                               xsp_;
+  XspressDetector                                                 xsp_;
 };
 
 } /* namespace Xspress */
