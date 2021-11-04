@@ -6,7 +6,7 @@ file(GLOB XSPRESS_LIBRARIES ${SUPPORT_DIR}/libxspress3.so
                             ${SUPPORT_DIR}/libimg_mod.so
 )
 
-file(GLOB APP_SOURCES XspressController.cpp XspressDetector.cpp LibXspressWrapper.cpp)
+file(GLOB APP_SOURCES XspressController.cpp XspressDetector.cpp XspressDAQ.cpp LibXspressWrapper.cpp)
 
 add_executable(xspressControl ${APP_SOURCES} XspressControlApp.cpp)
 

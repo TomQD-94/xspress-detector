@@ -25,6 +25,7 @@ const std::string XspressController::CONFIG_XSP_NUM_CARDS         = "num_cards";
 const std::string XspressController::CONFIG_XSP_NUM_TF            = "num_tf";
 const std::string XspressController::CONFIG_XSP_BASE_IP           = "base_ip";
 const std::string XspressController::CONFIG_XSP_MAX_CHANNELS      = "max_channels";
+const std::string XspressController::CONFIG_XSP_MAX_SPECTRA       = "max_spectra";
 const std::string XspressController::CONFIG_XSP_DEBUG             = "debug";
 const std::string XspressController::CONFIG_XSP_CONFIG_PATH       = "config_path";
 const std::string XspressController::CONFIG_XSP_CONFIG_SAVE_PATH  = "config_save_path";
@@ -42,6 +43,9 @@ const std::string XspressController::CONFIG_CMD                   = "cmd";
 const std::string XspressController::CONFIG_CMD_CONNECT           = "connect";
 const std::string XspressController::CONFIG_CMD_SAVE              = "save";
 const std::string XspressController::CONFIG_CMD_RESTORE           = "restore";
+const std::string XspressController::CONFIG_CMD_START             = "start";
+const std::string XspressController::CONFIG_CMD_STOP              = "stop";
+const std::string XspressController::CONFIG_CMD_TRIGGER           = "trigger";
 
 /** Construct a new XspressController class.
  *
@@ -286,6 +290,13 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     xsp_.setXspMaxChannels(max_channels);
   }
 
+  // Check for the maximum number of spectra available in the Xspress
+  if (config.has_param(XspressController::CONFIG_XSP_MAX_SPECTRA)) {
+    int max_spectra = config.get_param<int>(XspressController::CONFIG_XSP_MAX_SPECTRA);
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "max_spectra set to  " << max_spectra);
+    xsp_.setXspMaxSpectra(max_spectra);
+  }
+
   // Check for the libxspress debug level
   if (config.has_param(XspressController::CONFIG_XSP_DEBUG)) {
     int debug = config.get_param<int>(XspressController::CONFIG_XSP_DEBUG);
@@ -330,7 +341,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
 
   // Check for trigger mode parameter
   if (config.has_param(XspressController::CONFIG_XSP_TRIGGER_MODE)) {
-    int trigger_mode = config.get_param<int>(XspressController::CONFIG_XSP_TRIGGER_MODE);
+    std::string trigger_mode = config.get_param<std::string>(XspressController::CONFIG_XSP_TRIGGER_MODE);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "trigger_mode set to  " << trigger_mode);
     xsp_.setXspTriggerMode(trigger_mode);
   }
@@ -397,6 +408,39 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
       reply.set_nack(xsp_.getErrorString());
     }
   }
+
+  // Check for a start acquisition command
+  if (config.has_param(XspressController::CONFIG_CMD_START)){
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "start acquisition command executing");
+    // Attempt to start an acquisition
+    int status = xsp_.startAcquisition();
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
+
+  // Check for a stop acquisition command
+  if (config.has_param(XspressController::CONFIG_CMD_STOP)){
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "stop acquisition command executing");
+    // Attempt to stop an acquisition
+    int status = xsp_.stopAcquisition();
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
+
+  // Check for a software trigger command
+  if (config.has_param(XspressController::CONFIG_CMD_TRIGGER)){
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "software trigger command executing");
+    // Send a software trigger
+    int status = xsp_.sendSoftwareTrigger();
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
 }
 
 /**
@@ -423,6 +467,8 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
                   XspressController::CONFIG_XSP_BASE_IP, xsp_.getXspBaseIP());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_MAX_CHANNELS, xsp_.getXspMaxChannels());
+  reply.set_param(XspressController::CONFIG_XSP + "/" +
+                  XspressController::CONFIG_XSP_MAX_SPECTRA, xsp_.getXspMaxSpectra());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_DEBUG, xsp_.getXspDebug());
   reply.set_param(XspressController::CONFIG_XSP + "/" +

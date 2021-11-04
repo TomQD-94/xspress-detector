@@ -19,6 +19,7 @@
 #include "logging.h"
 #include "xspress3.h"
 #include "LibXspressWrapper.h"
+#include "XspressDAQ.h"
 
 using namespace log4cxx;
 using namespace log4cxx::helpers;
@@ -67,6 +68,8 @@ public:
   std::string getXspBaseIP();
   void setXspMaxChannels(int max_channels);
   int getXspMaxChannels();
+  void setXspMaxSpectra(int max_spectra);
+  int getXspMaxSpectra();
   void setXspDebug(int debug);
   int getXspDebug();
   void setXspConfigPath(const std::string& config_path);
@@ -79,8 +82,8 @@ public:
   int getXspRunFlags();
   void setXspDTCEnergy(double energy);
   double getXspDTCEnergy();
-  void setXspTriggerMode(int mode);
-  int getXspTriggerMode();
+  void setXspTriggerMode(const std::string& mode);
+  std::string getXspTriggerMode();
   void setXspInvertF0(int invert_f0);
   int getXspInvertF0();
   void setXspInvertVeto(int invert_veto);
@@ -95,6 +98,8 @@ public:
 private:
   /** libxspress wrapper object */
   LibXspressWrapper             detector_;
+  /** Pointer to DAQ object */
+  boost::shared_ptr<XspressDAQ>   daq_;
   /** Simulation flag for this wrapper */
   bool                          simulated_;
   /** Connected flag */
@@ -115,6 +120,8 @@ private:
   std::string                   xsp_base_IP_;
   /** Set the maximum number of channels */
   int                           xsp_max_channels_;
+  /** Set the maximum number of spectra (eg 4096) */
+  int                           xsp_max_spectra_;
   /** Enable debug messages */
   int                           xsp_debug_;
   /** Path to Xspress configuration files */
@@ -134,7 +141,7 @@ private:
   /** Clock period */
   double                        xsp_clock_period_;
   /** Trigger mode */
-  int                           xsp_trigger_mode_;
+  std::string                   xsp_trigger_mode_;
   /** Invert f0 */
   int                           xsp_invert_f0_;
   /** Invert veto */

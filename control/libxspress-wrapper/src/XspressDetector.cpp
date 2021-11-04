@@ -27,6 +27,7 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_num_tf_(0),
     xsp_base_IP_(""),
     xsp_max_channels_(0),
+    xsp_max_spectra_(0),
     xsp_debug_(0),
     xsp_config_path_(""),
     xsp_config_save_path_(""),
@@ -36,7 +37,7 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_dtc_params_updated_(false),
     xsp_dtc_energy_(0.0),
     xsp_clock_period_(0),
-    xsp_trigger_mode_(0),
+    xsp_trigger_mode_(""),
     xsp_invert_f0_(0),
     xsp_invert_veto_(0),
     xsp_debounce_(0),
@@ -97,6 +98,8 @@ int XspressDetector::connect()
       // We have a valid handle to set the connected status
       LOG4CXX_INFO(logger_, "Connected to Xspress");
       connected_ = true;
+      // Construct the DAQ object (currently hardcoded to 4 threads)
+      daq_ = boost::shared_ptr<XspressDAQ>(new XspressDAQ(&detector_, xsp_max_channels_, 4, xsp_max_spectra_));
     }
   }
   return status;
@@ -192,43 +195,53 @@ int XspressDetector::restoreSettings()
   // Set up resgrades
   if (status == XSP_STATUS_OK){
     status = detector_.setup_resgrades(xsp_use_resgrades_, xsp_max_channels_, xsp_num_aux_data_);
-  } else {
-    setErrorString(detector_.getErrorString());
+    if (status == XSP_STATUS_OK){
+      LOG4CXX_DEBUG_LEVEL(1, logger_, "xsp_num_aux_data set to " << xsp_num_aux_data_);
+      // Setup DAQ object with num_aux_data
+      daq_->set_num_aux_data(xsp_num_aux_data_);
+    } else {
+      setErrorString(detector_.getErrorString());
+    }
   }
 
   // Apply run flags parameter
   if (status == XSP_STATUS_OK){
     status = detector_.set_run_flags(xsp_run_flags_);
-  } else {
-    setErrorString(detector_.getErrorString());
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
   }
 
   // Read existing SCA params
   if (status == XSP_STATUS_OK){
     status = readSCAParams();
-  } else {
-    setErrorString(detector_.getErrorString());
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
   }
 
   // Read the DTC parameters
   if (status == XSP_STATUS_OK){
     status = readDTCParams();
-  } else {
-    setErrorString(detector_.getErrorString());
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
   }
 
   // We ensure here that DTC energy is set between application restart and frame acquisition
   if (status == XSP_STATUS_OK){
     status = detector_.set_dtc_energy(xsp_dtc_energy_);
-  } else {
-    setErrorString(detector_.getErrorString());
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
   }
 
   // Read the clock period
   if (status == XSP_STATUS_OK){
     status = detector_.get_clock_period(xsp_clock_period_);
-  } else {
-    setErrorString(detector_.getErrorString());
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
   }
 
   // Set the reconnect flag if something has gone wrong with this configuration
@@ -237,8 +250,9 @@ int XspressDetector::restoreSettings()
   // Re-apply trigger mode setting, since may have been overridden by restored config
   if (status == XSP_STATUS_OK){
     status = setTriggerMode();
-  } else {
-    setErrorString(detector_.getErrorString());
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
   }
 
   return status;
@@ -318,6 +332,7 @@ int XspressDetector::startAcquisition()
   int status = XSP_STATUS_OK;
   // Check we are connected to the hardware
   LOG4CXX_INFO(logger_, "Arming detector for data collection");
+
   if (checkConnected()){
     // Set the trigger mode
     status = setTriggerMode();
@@ -334,7 +349,7 @@ int XspressDetector::startAcquisition()
   }
 
   if (status == XSP_STATUS_OK){
-    if (xsp_trigger_mode_ == TM_SOFTWARE){
+    if (xsp_trigger_mode_ == TM_SOFTWARE_STR){
       // Arm for soft trigger
       status = detector_.histogram_arm(0);
     } else {
@@ -342,28 +357,44 @@ int XspressDetector::startAcquisition()
       status = detector_.histogram_start(0);
     }
   }
-  LOG4CXX_INFO(logger_, "Armed complete, detector acquiring");
-  acquiring_ = true;
+
+  if (status == XSP_STATUS_OK){
+    // Prime the DAQ threads with the expected number of frames
+    daq_->startAcquisition(xsp_frames_);
+  }
+
+  if (status == XSP_STATUS_ERROR){
+    LOG4CXX_INFO(logger_, "Arm complete, detector ready for acquisition");
+    acquiring_ = true;
+  }
+  return status;
 }
 
 int XspressDetector::stopAcquisition()
 {
-
+  int status = XSP_STATUS_OK;
+  if (acquiring_){
+    status = detector_.histogram_stop(-1);
+  }
+  return status;
 }
 
 int XspressDetector::sendSoftwareTrigger()
 {
-//            if (triggerMode == TM_SOFTWARE && adStatus == ADStatusAcquire) {
-//                // In this case, we don't want to start acquisition from scratch, just trigger another frame.
-//                xsp3_status |= xsp3_histogram_continue(xsp3_handle_, 0);
-//                xsp3_status |= xsp3_histogram_pause(xsp3_handle_, 0);
-//                // (The time elapsed between the above two library calls is unimportant.)
-
-//                if (triggerMode == TM_SOFTWARE) {
-//                    xsp3_status |= xsp3_histogram_arm(xsp3_handle_, 0);
-//                    xsp3_status |= xsp3_histogram_continue(xsp3_handle_, 0);
-//                    xsp3_status |= xsp3_histogram_pause(xsp3_handle_, 0);
-
+  int status = XSP_STATUS_OK;
+  if (acquiring_){
+    if (xsp_trigger_mode_ == TM_SOFTWARE_STR){
+      status = detector_.histogram_continue(0);
+      status |= detector_.histogram_pause(0);
+    } else {
+      setErrorString("Cannot send software trigger, trigger_mode is not [software]");
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    setErrorString("Cannot send software trigger if not acquiring");
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
 }
 
 void XspressDetector::setXspNumCards(int num_cards)
@@ -441,6 +472,16 @@ int XspressDetector::getXspMaxChannels()
   return xsp_max_channels_;
 }
 
+void XspressDetector::setXspMaxSpectra(int max_spectra)
+{
+  xsp_max_spectra_ = max_spectra;
+}
+
+int XspressDetector::getXspMaxSpectra()
+{
+  return xsp_max_spectra_;
+}
+
 void XspressDetector::setXspDebug(int debug)
 {
   xsp_debug_ = debug;
@@ -501,12 +542,12 @@ double XspressDetector::getXspDTCEnergy()
   return xsp_dtc_energy_;
 }
 
-void XspressDetector::setXspTriggerMode(int mode)
+void XspressDetector::setXspTriggerMode(const std::string& mode)
 {
   xsp_trigger_mode_ = mode;
 }
 
-int XspressDetector::getXspTriggerMode()
+std::string XspressDetector::getXspTriggerMode()
 {
   return xsp_trigger_mode_;
 }

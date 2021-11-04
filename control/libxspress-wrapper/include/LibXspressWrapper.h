@@ -48,6 +48,17 @@ using namespace log4cxx::helpers;
 #define TM_LVDS_VETO_ONLY                   7
 #define TM_LVDS_BOTH                        8
 
+// Trigger mode strings values
+#define TM_SOFTWARE_STR                     "software"
+#define TM_TTL_RISING_EDGE_STR              "ttl_rising"
+#define TM_BURST_STR                        "burst"
+#define TM_TTL_VETO_ONLY_STR                "ttl_veto_only"
+#define TM_SOFTWARE_START_STOP_STR          "software_start_stop"
+#define TM_IDC_STR                          "idc"
+#define TM_TTL_BOTH_STR                     "ttl_both"
+#define TM_LVDS_VETO_ONLY_STR               "lvds_veto_only"
+#define TM_LVDS_BOTH_STR                    "lvds_both"
+
 namespace Xspress
 {
 
@@ -112,13 +123,34 @@ public:
   int setTriggerMode(int frames,
                      double exposure_time,
                      double clock_period,
-                     int trigger_mode,
+                     const std::string& trigger_mode,
                      int debounce,
                      int invert_f0,
                      int invert_veto);
   int get_num_frames_read(int64_t *furthest_frame);
+  int histogram_circ_ack(int card, 
+                         uint32_t frame_number,
+                         uint32_t number_of_frames,
+                         uint32_t max_channels);
   int histogram_start(int card);
   int histogram_arm(int card);
+  int histogram_continue(int card);
+  int histogram_pause(int card);
+  int histogram_stop(int card);
+  int string_trigger_mode_to_int(const std::string& mode);
+  int histogram_memcpy(uint32_t *buffer,
+                       uint32_t tf, 
+                       uint32_t num_tf,
+                       uint32_t total_tf,
+                       uint32_t num_eng,
+                       uint32_t num_aux,
+                       uint32_t start_chan,
+                       uint32_t num_chan);
+  int validate_histogram_dims(uint32_t num_eng,
+                              uint32_t num_aux,
+                              uint32_t start_chan,
+                              uint32_t num_chan,
+                              uint32_t *buffer_length);
 
   static const int runFlag_MCA_SPECTRA_;
   static const int runFlag_SCALERS_ONLY_;
@@ -133,6 +165,8 @@ private:
   int                           xsp_handle_;
   /** Last error string description */
   std::string                   error_string_;
+  /** String representation of trigger modes */
+  std::map<std::string, int>    trigger_modes_;
 
 };
 

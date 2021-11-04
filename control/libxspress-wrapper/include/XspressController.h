@@ -70,6 +70,7 @@ private:
   static const std::string CONFIG_XSP_NUM_TF;
   static const std::string CONFIG_XSP_BASE_IP;
   static const std::string CONFIG_XSP_MAX_CHANNELS;
+  static const std::string CONFIG_XSP_MAX_SPECTRA;
   static const std::string CONFIG_XSP_DEBUG;
   static const std::string CONFIG_XSP_CONFIG_PATH;
   static const std::string CONFIG_XSP_CONFIG_SAVE_PATH;
@@ -88,6 +89,9 @@ private:
   static const std::string CONFIG_CMD_CONNECT;
   static const std::string CONFIG_CMD_SAVE;
   static const std::string CONFIG_CMD_RESTORE;
+  static const std::string CONFIG_CMD_START;
+  static const std::string CONFIG_CMD_STOP;
+  static const std::string CONFIG_CMD_TRIGGER;
 
   void setupControlInterface(const std::string& ctrlEndpointString);
   void closeControlInterface();

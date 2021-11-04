@@ -36,6 +36,17 @@ LibXspressWrapper::LibXspressWrapper() :
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing LibXspressWrapper");
+
+  // Create the trigger mode map
+  trigger_modes_[TM_SOFTWARE_STR] = TM_SOFTWARE;
+  trigger_modes_[TM_TTL_RISING_EDGE_STR] = TM_TTL_RISING_EDGE;
+  trigger_modes_[TM_BURST_STR] = TM_BURST;
+  trigger_modes_[TM_TTL_VETO_ONLY_STR] = TM_TTL_VETO_ONLY;
+  trigger_modes_[TM_SOFTWARE_START_STOP_STR] = TM_SOFTWARE_START_STOP;
+  trigger_modes_[TM_IDC_STR] = TM_IDC;
+  trigger_modes_[TM_TTL_BOTH_STR] = TM_TTL_BOTH;
+  trigger_modes_[TM_LVDS_VETO_ONLY_STR] = TM_LVDS_VETO_ONLY;
+  trigger_modes_[TM_LVDS_BOTH_STR] = TM_LVDS_BOTH;
 }
 
 /** Destructor for XspressDetector class.
@@ -182,7 +193,7 @@ int LibXspressWrapper::setup_resgrades(bool use_resgrades, int max_channels, int
 {
   int status = XSP_STATUS_OK;
   int xsp_status = 0;
-  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_format_run");
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper setting up resgrades and calling xsp3_format_run");
   for (int chan = 0; chan < max_channels; chan++) {
     int aux_mode = 0;
     if (use_resgrades){
@@ -655,7 +666,7 @@ int LibXspressWrapper::mapTimeFrameSource(Xsp3Timing *api_mode,
       break;
 
     default:
-      LOG4CXX_ERROR(logger_, "Mapping an unknown timeframe source. mode: " << trigger_mode);
+      LOG4CXX_ERROR(logger_, "Mapping an unknown timeframe source mode: " << trigger_mode);
       status = XSP_STATUS_ERROR;
       break;
   }
@@ -674,7 +685,7 @@ int LibXspressWrapper::mapTimeFrameSource(Xsp3Timing *api_mode,
 int LibXspressWrapper::setTriggerMode(int frames,
                                       double exposure_time,
                                       double clock_period,
-                                      int trigger_mode,
+                                      const std::string& trigger_mode,
                                       int debounce,
                                       int invert_f0,
                                       int invert_veto)
@@ -683,10 +694,11 @@ int LibXspressWrapper::setTriggerMode(int frames,
   Xsp3Timing xsp_trigger_mode = {0};
   int itfg_trig_mode;
   int xsp_status = XSP3_OK;
+  int tm = string_trigger_mode_to_int(trigger_mode);
 
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_itfg_setup and xsp3_set_timing");  
 
-  status = mapTimeFrameSource(&xsp_trigger_mode, &itfg_trig_mode, trigger_mode, debounce, invert_f0, invert_veto);
+  status = mapTimeFrameSource(&xsp_trigger_mode, &itfg_trig_mode, tm, debounce, invert_f0, invert_veto);
   if (status == XSP_STATUS_OK){
     if (xsp_trigger_mode.t_src == XSP3_GTIMA_SRC_INTERNAL) {
       xsp_status = xsp3_itfg_setup(xsp_handle_, 
@@ -717,7 +729,21 @@ int LibXspressWrapper::get_num_frames_read(int64_t *furthest_frame)
   Xsp3ErrFlag flags;
   int xsp_status = xsp3_scaler_check_progress_details(xsp_handle_, &flags, 0, furthest_frame);
   if (xsp_status < XSP3_OK) {
-    checkErrorCode("xsp3_dma_check_desc", xsp_status);
+    checkErrorCode("xsp3_scaler_check_progress_details", xsp_status);
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int LibXspressWrapper::histogram_circ_ack(int card, 
+                                          uint32_t frame_number,
+                                          uint32_t number_of_frames,
+                                          uint32_t max_channels)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = xsp3_histogram_circ_ack(xsp_handle_, card, frame_number, max_channels, number_of_frames);
+  if (xsp_status < XSP3_OK) {
+    checkErrorCode("xsp3_histogram_circ_ack", xsp_status);
     status = XSP_STATUS_ERROR;
   }
   return status;
@@ -741,6 +767,182 @@ int LibXspressWrapper::histogram_arm(int card)
   if (xsp_status < XSP3_OK) {
     checkErrorCode("xsp3_histogram_arm", xsp_status);
     status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int LibXspressWrapper::histogram_continue(int card)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = xsp3_histogram_continue(xsp_handle_, card);
+  if (xsp_status < XSP3_OK) {
+    checkErrorCode("xsp3_histogram_continue", xsp_status);
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int LibXspressWrapper::histogram_pause(int card)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = xsp3_histogram_pause(xsp_handle_, card);
+  if (xsp_status < XSP3_OK){
+    checkErrorCode("xsp3_histogram_pause", xsp_status);
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int LibXspressWrapper::histogram_stop(int card)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = xsp3_histogram_stop(xsp_handle_, card);
+  if (xsp_status < XSP3_OK){
+    checkErrorCode("xsp3_histogram_stop", xsp_status);
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int LibXspressWrapper::string_trigger_mode_to_int(const std::string& mode)
+{
+  int trigger_mode = -1;
+  if (trigger_modes_.count(mode) > 0){
+    trigger_mode = trigger_modes_[mode];
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "Converting trigger mode " << mode << " into integer: " << trigger_mode);
+  } else {
+    LOG4CXX_ERROR(logger_, "Invalid trigger mode requested: " << mode);
+  }
+  return trigger_mode;
+}
+
+int LibXspressWrapper::histogram_memcpy(uint32_t *buffer,
+                                        uint32_t tf, 
+                                        uint32_t num_tf,
+                                        uint32_t total_tf,
+                                        uint32_t num_eng,
+                                        uint32_t num_aux,
+                                        uint32_t start_chan,
+                                        uint32_t num_chan)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status;
+  uint32_t twrap;
+  uint32_t *frame_ptr;
+  int rc;
+  int thisPath, chanIdx;
+  bool circ_buffer;
+
+  if (xsp_handle_ < 0 || xsp_handle_ >= XSP3_MAX_PATH || !Xsp3Sys[xsp_handle_].valid){
+    checkErrorCode("histogram_memcpy", XSP3_INVALID_PATH);
+    status = XSP_STATUS_ERROR;
+  } else {
+    circ_buffer = (bool)(Xsp3Sys[xsp_handle_].run_flags & XSP3_RUN_FLAGS_CIRCULAR_BUFFER);
+
+    if (Xsp3Sys[xsp_handle_].features.generation == XspressGen3Mini){
+      xsp_status = xsp3m_histogram_read_frames(xsp_handle_, buffer, 0, start_chan, tf, num_eng, num_chan, num_tf);
+      if (xsp_status < XSP3_OK){
+        checkErrorCode("xsp3_histogram_read_frames", xsp_status);
+        status = XSP_STATUS_ERROR;
+      }
+    } else {
+      if (tf > total_tf && !circ_buffer) {
+        LOG4CXX_ERROR(logger_, "Requested timeframe " << tf << " lies beyond end of buffer (length " << total_tf <<")");
+        checkErrorCode("xsp3_histogram_memcpy", XSP3_RANGE_CHECK);
+        status = XSP_STATUS_ERROR;
+      }
+      for (uint32_t t = tf; t < tf + num_tf; t++) {
+        if (circ_buffer){
+          twrap = t % total_tf;
+        } else {
+          twrap = t;
+        }
+        for (uint32_t c = start_chan; c < start_chan + num_chan; c++) {
+          if ((xsp_status = xsp3_resolve_path(xsp_handle_, c, &thisPath, &chanIdx)) < 0){
+            checkErrorCode("xsp3_resolve_path", xsp_status);
+            status = XSP_STATUS_ERROR;
+          } else {
+            frame_ptr = Xsp3Sys[thisPath].histogram[chanIdx].buffer;
+            frame_ptr += num_eng * num_aux * twrap;
+            memcpy(buffer, frame_ptr, num_eng * num_aux * sizeof(uint32_t));
+            buffer += num_eng * num_aux;
+          }
+        }
+      }
+    }
+  }
+  return status;
+}
+
+int LibXspressWrapper::validate_histogram_dims(uint32_t num_eng,
+                                               uint32_t num_aux,
+                                               uint32_t start_chan,
+                                               uint32_t num_chan,
+                                               uint32_t *buffer_length)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status;
+  unsigned c;
+  int total_tf;
+  int nbins_eng, nbins_aux1, nbins_aux2;
+  int thisPath, chanIdx;
+  char old_message[XSP3_MAX_MSG_LEN + 2];
+
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "validate_histogram_dims called with num_eng=" << num_eng <<
+                                  " num_aux=" << num_aux << " start_chan=" << start_chan <<
+                                  " num_chan=" << num_chan);
+
+  if (xsp_handle_ < 0 || xsp_handle_ >= XSP3_MAX_PATH || !Xsp3Sys[xsp_handle_].valid) {
+    checkErrorCode("validate_histogram_dims", XSP3_INVALID_PATH);
+    status = XSP_STATUS_ERROR;
+  }
+
+  if (status == XSP_STATUS_OK){
+    if ((xsp_status = xsp3_get_format(xsp_handle_, start_chan, &nbins_eng, &nbins_aux1, &nbins_aux2, &total_tf)) < 0) {
+      checkErrorCode("xsp3_get_format", xsp_status);
+      status = XSP_STATUS_ERROR;
+    }
+  }
+
+  if (status == XSP_STATUS_OK){
+    if (num_chan > 1) {
+      int ne, na1, na2, nt;
+      for (c = start_chan; c < (start_chan + num_chan); c++) {
+        if ((xsp_status = xsp3_get_format(xsp_handle_, c, &ne, &na1, &na2, &nt)) < 0) {
+          checkErrorCode("xsp3_get_format", xsp_status);
+          status = XSP_STATUS_ERROR;
+        } else {
+          if (ne != nbins_eng || na1 != nbins_aux1 || na2 != nbins_aux2 || nt != total_tf) {
+            checkErrorCode("xsp3_histogram_read4d: If reading more than 1 channel formats must match", XSP3_ERROR);
+            status = XSP_STATUS_ERROR;
+          }
+        }
+      }
+    }
+  }
+
+  if (status == XSP_STATUS_OK){
+    if ((xsp_status = xsp3_resolve_path(xsp_handle_, start_chan, &thisPath, &chanIdx)) < 0){
+      checkErrorCode("xsp3_resolve_path", xsp_status);
+      status = XSP_STATUS_ERROR;
+    }
+  }
+
+  if (status == XSP_STATUS_OK){
+    if (num_eng == 0 || num_aux == 0 || num_chan == 0) {
+      checkErrorCode("xsp3_histogram_read4d: no data requested", XSP3_RANGE_CHECK);
+      status = XSP_STATUS_ERROR;
+    } else {
+      if (num_eng > (unsigned) nbins_eng || num_aux != (unsigned) nbins_aux1 * nbins_aux2
+          || start_chan + num_chan > (unsigned) Xsp3Sys[xsp_handle_].num_chan) {
+        checkErrorCode("xsp3_histogram_read4d: Requested region mismatch", XSP3_RANGE_CHECK);
+        status = XSP_STATUS_ERROR;
+      }
+    }
+  }
+
+  if (status == XSP_STATUS_OK){
+    *buffer_length = (uint32_t) (total_tf);
   }
   return status;
 }
