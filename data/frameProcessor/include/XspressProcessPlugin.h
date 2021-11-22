@@ -15,6 +15,31 @@ using namespace log4cxx::helpers;
 
 namespace FrameProcessor {
 
+class XspressMemoryBlock
+{
+public:
+
+  XspressMemoryBlock();
+  virtual ~XspressMemoryBlock();
+  void set_size(uint32_t frame_size, uint32_t max_frames);
+  void reallocate();
+  void reset();
+  void add_frame(uint32_t frame_id, char *ptr);
+  bool check_full();
+  uint32_t size();
+  char *get_data_ptr();
+
+private:
+  char *ptr_;
+  uint32_t num_bytes_;
+  uint32_t frames_;
+  uint32_t max_frames_;
+  uint32_t frame_size_;
+
+  /** Pointer to logger */
+  LoggerPtr logger_;
+};
+
     class XspressProcessPlugin : public FrameProcessorPlugin {
     public:
         XspressProcessPlugin();
@@ -35,22 +60,22 @@ namespace FrameProcessor {
         std::string get_version_long();
 
     private:
+
+        void set_number_of_channels(uint32_t num_channels);
+        void set_number_of_aux(uint32_t num_aux);
+        void setup_memory_allocation();
+        
         // Plugin interface
         void process_frame(boost::shared_ptr <Frame> frame);
 
-        void deadtimeCorrectScalers(uint32_t numChans, uint32_t *iSCA, double *dSCA, double *factors, double *corrected,
-                                    double clockPeriod);
+        uint32_t num_energy_bins_;
+        uint32_t num_aux_;
+        uint32_t num_channels_;
+        uint32_t frames_per_block_;
+        uint32_t current_block_start_;
 
-        void calculateDeadtimeCorrection(uint32_t numChans, double clockPeriod, double deadtimeEnergy, uint32_t *sca,
-                                         double *factors, double *corrected);
+        std::vector<boost::shared_ptr<XspressMemoryBlock> > memory_ptrs_;
 
-        bool dtcEnabled;
-        int *dtcFlags;
-        double *dtcParams;
-
-        uint32_t DataEnd;
-        size_t mcaDataSize;
-        size_t scalerDataSize;
 
         static const std::string CONFIG_DTC_FLAGS;
         static const std::string CONFIG_DTC_PARAMS;
