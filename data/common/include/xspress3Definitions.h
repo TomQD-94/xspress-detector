@@ -17,6 +17,15 @@
 #define XSP3_DTC_IWRO                       6
 #define XSP3_DTC_IWRG                       7
 
-typedef struct { size_t numEnergy; size_t numAux; size_t numChannels; u_int64_t frameNumber; double deadtimeEnergy; double clockPeriod; } FrameHeader;
+typedef struct
+{
+  uint32_t frame_number;
+  uint32_t num_energy_bins;
+  uint32_t num_aux;
+  uint32_t num_channels;
+  uint32_t num_scalars;
+  double dead_time_energy;
+  double clock_period;
+} FrameHeader;
 
 #endif //_XSPRESS3DEFINITIONS_EPICS_H
