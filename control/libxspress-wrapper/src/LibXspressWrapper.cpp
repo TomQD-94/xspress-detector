@@ -723,25 +723,38 @@ int LibXspressWrapper::setTriggerMode(int frames,
   return status;
 }
 
-int LibXspressWrapper::get_num_frames_read(int64_t *furthest_frame)
+int LibXspressWrapper::get_num_frames_read(int32_t *frames)
 {
   int status = XSP_STATUS_OK;
+  int64_t furthest_frame = 0;
   Xsp3ErrFlag flags;
-  int xsp_status = xsp3_scaler_check_progress_details(xsp_handle_, &flags, 0, furthest_frame);
-  if (xsp_status < XSP3_OK) {
-    checkErrorCode("xsp3_scaler_check_progress_details", xsp_status);
+  *frames = xsp3_scaler_check_progress_details(xsp_handle_, &flags, 0, &furthest_frame);
+  if (*frames < XSP3_OK) {
+    checkErrorCode("xsp3_scaler_check_progress_details", *frames);
     status = XSP_STATUS_ERROR;
+  } else {
+    if (flags != 0){
+      std::stringstream ss;
+      ss << "xsp3_scaler_check_progress_details reported error flags [" << flags << "]";
+      setErrorString(ss.str());
+      status = XSP_STATUS_ERROR;
+    }
   }
   return status;
 }
 
-int LibXspressWrapper::histogram_circ_ack(int card, 
+int LibXspressWrapper::get_num_scalars(uint32_t *num_scalars)
+{
+  *num_scalars = XSP3_SW_NUM_SCALERS;
+}
+
+int LibXspressWrapper::histogram_circ_ack(int channel,
                                           uint32_t frame_number,
                                           uint32_t number_of_frames,
                                           uint32_t max_channels)
 {
   int status = XSP_STATUS_OK;
-  int xsp_status = xsp3_histogram_circ_ack(xsp_handle_, card, frame_number, max_channels, number_of_frames);
+  int xsp_status = xsp3_histogram_circ_ack(xsp_handle_, channel, frame_number, max_channels, number_of_frames);
   if (xsp_status < XSP3_OK) {
     checkErrorCode("xsp3_histogram_circ_ack", xsp_status);
     status = XSP_STATUS_ERROR;
@@ -814,6 +827,43 @@ int LibXspressWrapper::string_trigger_mode_to_int(const std::string& mode)
     LOG4CXX_ERROR(logger_, "Invalid trigger mode requested: " << mode);
   }
   return trigger_mode;
+}
+
+int LibXspressWrapper::scaler_read(uint32_t *buffer,
+                                   uint32_t tf,
+                                   uint32_t num_tf,
+                                   uint32_t start_chan,
+                                   uint32_t num_chan)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = xsp3_scaler_read(xsp_handle_, buffer, 0, start_chan, tf, XSP3_SW_NUM_SCALERS, num_chan, num_tf);
+  if (xsp_status < XSP3_OK){
+    checkErrorCode("xsp3_scaler_read", xsp_status);
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int LibXspressWrapper::calculate_dtc_factors(uint32_t *scalers,
+                                             double *dtc_factors,
+                                             double *inp_est,
+                                             uint32_t frames,
+                                             uint32_t start_chan,
+                                             uint32_t num_chan)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = xsp3_calculateDeadtimeCorrectionFactors(xsp_handle_,
+                                                           scalers,
+                                                           dtc_factors,
+                                                           inp_est,
+                                                           frames,
+                                                           start_chan,
+                                                           num_chan);
+  if (xsp_status < XSP3_OK){
+    checkErrorCode("xsp3_calculateDeadtimeCorrectionFactors", xsp_status);
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
 }
 
 int LibXspressWrapper::histogram_memcpy(uint32_t *buffer,

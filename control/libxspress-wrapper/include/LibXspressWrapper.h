@@ -127,8 +127,9 @@ public:
                      int debounce,
                      int invert_f0,
                      int invert_veto);
-  int get_num_frames_read(int64_t *furthest_frame);
-  int histogram_circ_ack(int card, 
+  int get_num_frames_read(int32_t *frames);
+  int get_num_scalars(uint32_t *num_scalars);
+  int histogram_circ_ack(int channel,
                          uint32_t frame_number,
                          uint32_t number_of_frames,
                          uint32_t max_channels);
@@ -138,6 +139,17 @@ public:
   int histogram_pause(int card);
   int histogram_stop(int card);
   int string_trigger_mode_to_int(const std::string& mode);
+  int scaler_read(uint32_t *buffer,
+                  uint32_t tf,
+                  uint32_t num_tf,
+                  uint32_t start_chan,
+                  uint32_t num_chan);
+  int calculate_dtc_factors(uint32_t *scalers,
+                            double *dtc_factors,
+                            double *inp_est,
+                            uint32_t frames,
+                            uint32_t start_chan,
+                            uint32_t num_chan);
   int histogram_memcpy(uint32_t *buffer,
                        uint32_t tf, 
                        uint32_t num_tf,

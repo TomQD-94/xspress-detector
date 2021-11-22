@@ -11,6 +11,7 @@
 #include "DebugLevelLogger.h"
 
 #define BASE_PORT 15150
+#define HEADER_ITEMS 5
 
 void free_frame(void *data, void *hint)
 {
@@ -134,14 +135,15 @@ void XspressDAQ::controlTask()
       LOG4CXX_INFO(logger_, "Buffer length calculated: [" << buffer_length_ << "]");
 
 
-      int64_t num_frames = 0;
+      int32_t num_frames = 0;
       int32_t frames_read = 0;
-      while (num_frames < total_frames){
+      bool acq_running = true;
+      while ((num_frames < total_frames) && acq_running){
         int status = detector_->get_num_frames_read(&num_frames);
         if (status == XSP_STATUS_OK){
           uint32_t frames_to_read = num_frames - frames_read;
           if (frames_to_read > 0){
-            LOG4CXX_DEBUG_LEVEL(4, logger_, "Current frames to read: " << frames_read << " - " << num_frames);
+              LOG4CXX_DEBUG_LEVEL(0, logger_, "Current frames to read: " << frames_read << " - " << num_frames-1);
             // Notify the worker threads to process the frames
             std::vector<boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > >::iterator iter;
             for (iter = work_queues_.begin(); iter != work_queues_.end(); ++iter){
@@ -153,8 +155,8 @@ void XspressDAQ::controlTask()
               done_queue_->remove();
             }
             // Once all worker threads have completed notify the circular buffer
-            LOG4CXX_DEBUG_LEVEL(4, logger_, "Ack circular buffer frames_read[" << frames_read << "] frames_to_read[" << frames_to_read << "]");
-            detector_->histogram_circ_ack(0, frames_read, frames_to_read, num_channels_);
+            status = detector_->histogram_circ_ack(0, frames_read, frames_to_read, num_channels_);
+            LOG4CXX_DEBUG_LEVEL(0, logger_, "Ack circular buffer [status=" << status << "] frames_read[" << frames_read << "] frames_to_read[" << frames_to_read << "]");
             LOG4CXX_DEBUG_LEVEL(4, logger_, "Worker threads completed and circular buffer acknowledgement sent");
             // Set frames read to correct value
             frames_read = num_frames;
@@ -162,6 +164,14 @@ void XspressDAQ::controlTask()
               // We need to wait for some frames
               sleep(0.001);
           }
+        } else {
+          LOG4CXX_ERROR(logger_, "Error: " << "INSERT MSG" << " Aborting acquisition");
+          acq_running = false;
+          // Abort the acquisition
+          detector_->histogram_stop(0);
+          //detector_->histogram_stop(1);
+          //detector_->histogram_stop(2);
+          //detector_->histogram_stop(3);
         }
       }
       LOG4CXX_INFO(logger_, "DAQ thread completed, read " << frames_read << " frames");
@@ -175,8 +185,11 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
                           int num_channels)
 {
   int status = XSP_STATUS_OK;
+  uint32_t num_scalars = 0;
 
   LOG4CXX_INFO(logger_, "Starting work task with ID [" << boost::this_thread::get_id() << "]");
+
+  detector_->get_num_scalars(&num_scalars);
 
   // Create the ZMQ endpoint for this worker
   std::stringstream ss;
@@ -185,17 +198,25 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
   zmq::socket_t *data_socket = new zmq::socket_t(*context_, ZMQ_PUSH);
   data_socket->bind(ss.str().c_str());
 
-  uint32_t frame_size = num_spectra_ * sizeof(uint32_t) * num_channels;
-  LOG4CXX_INFO(logger_, "workTask[" << index << "] => Calculated frame size: [" << frame_size << "]");
-
   bool executing = true;
   while (executing){
     boost::shared_ptr<XspressDAQTask> task = queue->remove();
+
     if (task->type_ == DAQ_TASK_TYPE_READ){
       int32_t frames_read = task->value1_;
       int32_t frames_to_read = task->value2_;
       if (frames_to_read > 0){
-        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => reading frames [" << frames_to_read << "]");
+        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => reading frames [" << frames_to_read << "]"); 
+
+        uint32_t header_size = HEADER_ITEMS * sizeof(uint32_t);
+        uint32_t data_size = num_spectra_ * num_channels * num_aux_data_ * sizeof(uint32_t);
+        uint32_t scalar_size = num_channels * num_scalars * sizeof(uint32_t);
+        uint32_t dtc_size = num_channels * sizeof(double);
+        uint32_t inp_est_size = num_channels * sizeof(double);
+        uint32_t frame_size = header_size + data_size + scalar_size + dtc_size + inp_est_size;
+
+        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => Num scalars: [" << num_scalars << "] scalar_size: [" << scalar_size << "]");
+        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => Calculated frame size: [" << frame_size << "]");
 
         //LOG4CXX_INFO(logger_, "Calling memcpy at channel: " << channel_index << " for " << num_channels << " channels");
 
@@ -204,11 +225,43 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
         // and then we can safely let ZMQ free that memory block at any time.
 
         for (int current_frame = 0; current_frame < frames_to_read; current_frame++){
-          // Allocate 1 frame of data
-          uint32_t *pMCAData = (uint32_t *)malloc(frame_size);
+          // Allocation of memory:
+          // 1 x uint32 => Frame number
+          // 1 x uint32 => Num spectra
+          // 1 x uint32 => Num aux data
+          // 1 x uint32 => Num channels
+          // Frame data [num_spectra x num_channels x num_aux_data x uint32]
+          unsigned char *base_ptr;
+          uint32_t *frame_ptr = (uint32_t *)malloc(frame_size);
+          uint32_t *h_ptr = frame_ptr;
+          base_ptr = (unsigned char *)frame_ptr;
+          base_ptr += header_size;
+          uint32_t *s_ptr = (uint32_t *)base_ptr;
+          base_ptr = (unsigned char *)frame_ptr;
+          base_ptr += (header_size + scalar_size);
+          double *dtc_ptr = (double *)base_ptr;
+          base_ptr = (unsigned char *)frame_ptr;
+          base_ptr += (header_size + scalar_size + dtc_size);
+          double *inp_est_ptr = (double *)base_ptr;
+          base_ptr = (unsigned char *)frame_ptr;
+          base_ptr += (header_size + scalar_size + dtc_size + inp_est_size);
+          uint32_t *d_ptr = (uint32_t *)base_ptr;
+
+//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => frame_ptr: [" << frame_ptr << "]");
+//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => h_ptr: [" << h_ptr << "]");
+//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => s_ptr: [" << s_ptr << "]");
+//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => d_ptr: [" << d_ptr << "]");
+
+
+          // Fill in the header data items
+          h_ptr[0] = frames_read + current_frame;
+          h_ptr[1] = num_spectra_;
+          h_ptr[2] = num_aux_data_;
+          h_ptr[3] = num_channels;
+          h_ptr[4] = num_scalars;
 
           // Perform the single frame memcpy
-          status = detector_->histogram_memcpy(pMCAData,
+          status = detector_->histogram_memcpy(d_ptr,
                                                frames_read + current_frame,
                                                1, // Read a single frame
                                                buffer_length_,
@@ -216,6 +269,22 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
                                                num_aux_data_,
                                                channel_index,
                                                num_channels);
+
+          // Perform the scalar memcpy
+          status = detector_->scaler_read(s_ptr,
+                                          frames_read + current_frame,
+                                          1, // Read a single frame
+                                          channel_index,
+                                          num_channels);
+
+
+          // Calculate the Dead Time Correction factors
+          status = detector_->calculate_dtc_factors(s_ptr,
+                                                    dtc_ptr,
+                                                    inp_est_ptr,
+                                                    1,
+                                                    channel_index,
+                                                    num_channels);
 
 //        for (int cindex = 0; cindex < num_channels; cindex++){
 //            int total = 0;
@@ -227,7 +296,7 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
 
           LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => sending ZMQ message");
           // Construct the ZMQ message wrapper and send the frame
-          zmq::message_t frame_data(pMCAData, frame_size, free_frame);
+          zmq::message_t frame_data(frame_ptr, frame_size, free_frame);
           data_socket->send(frame_data, 0);
           LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => message sent");
         }

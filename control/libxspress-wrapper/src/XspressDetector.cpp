@@ -98,8 +98,8 @@ int XspressDetector::connect()
       // We have a valid handle to set the connected status
       LOG4CXX_INFO(logger_, "Connected to Xspress");
       connected_ = true;
-      // Construct the DAQ object (currently hardcoded to 4 threads)
-      daq_ = boost::shared_ptr<XspressDAQ>(new XspressDAQ(&detector_, xsp_max_channels_, 4, xsp_max_spectra_));
+      // Construct the DAQ object (currently hardcoded to 36 threads)
+      daq_ = boost::shared_ptr<XspressDAQ>(new XspressDAQ(&detector_, xsp_max_channels_, 9, xsp_max_spectra_));
     }
   }
   return status;
@@ -361,9 +361,7 @@ int XspressDetector::startAcquisition()
   if (status == XSP_STATUS_OK){
     // Prime the DAQ threads with the expected number of frames
     daq_->startAcquisition(xsp_frames_);
-  }
 
-  if (status == XSP_STATUS_ERROR){
     LOG4CXX_INFO(logger_, "Arm complete, detector ready for acquisition");
     acquiring_ = true;
   }
