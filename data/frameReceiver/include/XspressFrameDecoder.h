@@ -53,6 +53,7 @@ namespace FrameReceiver {
 
   private:
     void *current_frame_buffer_;
+    void *dropped_frame_buffer_;
     int32_t current_frame_buffer_id_;
     uint32_t current_frame_number_;
     enum XspressState current_state;

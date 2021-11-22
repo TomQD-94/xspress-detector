@@ -5,7 +5,10 @@ namespace FrameReceiver {
 
     XspressFrameDecoder::XspressFrameDecoder() : FrameDecoderZMQ(), current_frame_buffer_(NULL), current_frame_number_(0),
                                          current_frame_buffer_id_(-1), current_state(WAITING_FOR_HEADER),
-                                         frames_dropped_(0), numChannels(8), numEnergy(4096), numAux(1), currentChannel(0) {
+                                         frames_dropped_(0), numChannels(8), numEnergy(4096), numAux(1), currentChannel(0) 
+    {
+      // Allocate memory for the dropped frames buffer
+      dropped_frame_buffer_ = malloc(get_frame_buffer_size());
     }
 
     XspressFrameDecoder::~XspressFrameDecoder() {
@@ -15,27 +18,62 @@ namespace FrameReceiver {
         this->logger_ = Logger::getLogger("FR.XspressFrameDecoder");
         this->logger_->setLevel(Level::getAll());
         FrameDecoder::init(logger, config_msg);
-        LOG4CXX_INFO(logger_, "Xspress frame decoder init called, citizens rejoice!");
+        LOG4CXX_INFO(logger_, "Xspress frame decoder init complete");
     }
 
     void *XspressFrameDecoder::get_next_message_buffer(void) {
         if (__builtin_expect(empty_buffer_queue_.empty(), false)) {
           // dropped for not having buffers available
           frames_dropped_++;
+          LOG4CXX_ERROR(logger_, "XspressFrameDecoder: Dropped " << frames_dropped_ << " frames");
+          current_frame_buffer_ = dropped_frame_buffer_;
           // use last valid buffer
-          return current_frame_buffer_;
         } else if (current_frame_buffer_id_ == -1) {
           current_frame_buffer_id_ = empty_buffer_queue_.front();
           empty_buffer_queue_.pop();
           current_frame_buffer_ = buffer_manager_->get_buffer_address(current_frame_buffer_id_);
         }
-        if (current_state == WAITING_FOR_HEADER) {
-          return current_frame_buffer_;
-        }
-        return static_cast<void *>(static_cast<char *>(buffer_manager_->get_buffer_address(current_frame_buffer_id_)) + sizeof(FrameHeader) + sizeof(uint32_t)*currentChannel * numEnergy * numAux);
+        return current_frame_buffer_;
     }
 
-    FrameDecoder::FrameReceiveState XspressFrameDecoder::process_message(size_t bytes_received) {
+    FrameDecoder::FrameReceiveState XspressFrameDecoder::process_message(size_t bytes_received)
+    {
+        FrameHeader *header_ = reinterpret_cast<FrameHeader*> (current_frame_buffer_);
+        current_frame_number_ = header_->frame_number;
+//        LOG4CXX_INFO(logger_, "Xspress message for frame [" << current_frame_number_ << "] received with " << bytes_received << " bytes");
+        if (current_frame_buffer_id_ != -1){
+          ready_callback_(current_frame_buffer_id_, current_frame_number_);
+        }
+        return FrameDecoder::FrameReceiveStateComplete;
+
+/*
+
+        uint32_t *ptr = (uint32_t *)current_frame_buffer_;
+        LOG4CXX_INFO(logger_, "Frame number[" << ptr[0] << 
+                              "] Num spectra[" << ptr[1] << 
+                              "] Num aux[" << ptr[2] <<
+                              "] Num channels[" << ptr[3] <<
+                              "] Num scalars[" << ptr[4] << "]");
+
+        LOG4CXX_INFO(logger_, "Scalar 1[" << ptr[5] << 
+                              "] Scalar 2[" << ptr[6] << 
+                              "] Scalar 3[" << ptr[7] << 
+                              "] Scalar 4[" << ptr[8] << 
+                              "] Scalar 5[" << ptr[9] << 
+                              "] Scalar 6[" << ptr[10] << 
+                              "] Scalar 7[" << ptr[11] << 
+                              "] Scalar 8[" << ptr[12] << 
+                              "] Scalar 9[" << ptr[13] << "]");
+
+        char *t_ptr = (char *)current_frame_buffer_;
+        t_ptr += ((5*4) + (9*9*4));
+        double *dtc_ptr = (double *)t_ptr;
+        LOG4CXX_INFO(logger_, "DTC factor[" << dtc_ptr[0] << 
+                              "] Input Estimate[" << dtc_ptr[1] << "]");
+
+
+        current_frame_number_ = ptr[0];
+
         switch (current_state) {
             case WAITING_FOR_HEADER:
               {
@@ -59,18 +97,19 @@ namespace FrameReceiver {
                 return FrameDecoder::FrameReceiveStateComplete;
               }
         }
+*/
     }
 
-    void XspressFrameDecoder::frame_meta_data(int meta) {
-        // end of message bit
-        if (meta & 1) {
-            current_frame_buffer_id_ = -1;
-            current_state = WAITING_FOR_HEADER;
-        }
+    void XspressFrameDecoder::frame_meta_data(int meta)
+    {
+      // end of message bit
+      if (meta & 1) {
+        current_frame_buffer_id_ = -1;
+      }
     }
 
     void XspressFrameDecoder::monitor_buffers(void) {
-
+      LOG4CXX_INFO(logger_, "Empty: " << empty_buffer_queue_.size() << " Dropped: " << frames_dropped_);
     }
 
     void XspressFrameDecoder::get_status(const std::string param_prefix, OdinData::IpcMessage &status_msg) {
