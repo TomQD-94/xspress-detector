@@ -47,6 +47,7 @@ public:
   void provideVersion(OdinData::IpcMessage& reply);
   void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void configureXsp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
+  void configureDAQ(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void configureCommand(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void requestConfiguration(OdinData::IpcMessage& reply);
   void resetStatistics(OdinData::IpcMessage& reply);
@@ -83,7 +84,12 @@ private:
   static const std::string CONFIG_XSP_DEBOUNCE;
   static const std::string CONFIG_XSP_EXPOSURE_TIME;
   static const std::string CONFIG_XSP_FRAMES;
- 
+
+  /** Configuration constants for DAQ class **/
+  static const std::string CONFIG_DAQ;
+  static const std::string CONFIG_DAQ_ENABLED;
+  static const std::string CONFIG_DAQ_ZMQ_ENDPOINTS;
+
   /** Configuration constants for commands **/
   static const std::string CONFIG_CMD;
   static const std::string CONFIG_CMD_CONNECT;

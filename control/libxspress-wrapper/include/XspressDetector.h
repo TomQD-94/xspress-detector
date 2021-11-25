@@ -47,6 +47,7 @@ public:
   int connect();
   int checkConnected();
   int setupChannels();
+  int enableDAQ();
   int checkSaveDir(const std::string& dir_name);
   int saveSettings();
   int restoreSettings();
@@ -94,6 +95,8 @@ public:
   double getXspExposureTime();
   void setXspFrames(int frames);
   int getXspFrames();
+  void setXspDAQEndpoints(std::vector<std::string> endpoints);
+  std::vector<std::string> getXspDAQEndpoints();
   
 private:
   /** libxspress wrapper object */
@@ -152,6 +155,9 @@ private:
   double                        xsp_exposure_time_;
   /** Number of frames */
   int                           xsp_frames_;
+  /** DAQ endpoints */
+  std::vector<std::string>      xsp_daq_endpoints_;
+  
   /** Number of frames read out by each channel */
   std::vector<int32_t>          xsp_status_frames_;
   /** Number of dropped frames for each channel */

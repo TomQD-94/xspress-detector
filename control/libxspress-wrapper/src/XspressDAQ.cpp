@@ -10,7 +10,6 @@
 #include "XspressDAQ.h"
 #include "DebugLevelLogger.h"
 
-#define BASE_PORT 15150
 #define HEADER_ITEMS 5
 
 void free_frame(void *data, void *hint)
@@ -27,15 +26,15 @@ namespace Xspress
  */
 XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr, 
                        uint32_t num_channels,
-                       uint32_t num_threads,
-                       uint32_t num_spectra):
+                       uint32_t num_spectra,
+                       std::vector<std::string> endpoints):
     logger_(log4cxx::Logger::getLogger("Xspress.XspressDAQ"))
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing XspressDAQ");
   detector_ = detector_ptr;
   num_channels_ = num_channels;
-  num_threads_ = num_threads;
+  num_threads_ = endpoints.size();
   num_spectra_ = num_spectra;
 
   // Create the control thread queue
@@ -71,7 +70,7 @@ XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr,
     work_queues_.push_back(queue);
 
     // Create the worker thread
-    work_threads_.push_back(new boost::thread(&XspressDAQ::workTask, this, queue, index, cur_chan, channels[index]));
+    work_threads_.push_back(new boost::thread(&XspressDAQ::workTask, this, queue, index, cur_chan, channels[index], endpoints[index]));
     cur_chan += channels[index];
 
   }
@@ -182,7 +181,8 @@ void XspressDAQ::controlTask()
 void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > queue,
                           int index,
                           int channel_index,
-                          int num_channels)
+                          int num_channels,
+                          const std::string& endpoint)
 {
   int status = XSP_STATUS_OK;
   uint32_t num_scalars = 0;
@@ -192,11 +192,9 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
   detector_->get_num_scalars(&num_scalars);
 
   // Create the ZMQ endpoint for this worker
-  std::stringstream ss;
-  ss << "tcp://127.0.0.1:" << (index + BASE_PORT);
-  LOG4CXX_INFO(logger_, "workTask[" << index << "] => Creating zmq socket and binding to [" << ss.str() << "]");
+  LOG4CXX_INFO(logger_, "workTask[" << index << "] => Creating zmq socket and binding to [" << endpoint << "]");
   zmq::socket_t *data_socket = new zmq::socket_t(*context_, ZMQ_PUSH);
-  data_socket->bind(ss.str().c_str());
+  data_socket->bind(endpoint.c_str());
 
   bool executing = true;
   while (executing){

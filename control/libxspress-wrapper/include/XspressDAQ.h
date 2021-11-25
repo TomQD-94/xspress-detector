@@ -56,8 +56,8 @@ class XspressDAQ
 public:
   XspressDAQ(LibXspressWrapper *detector_ptr,
              uint32_t num_channels,
-             uint32_t num_threads,
-             uint32_t num_spectra);
+             uint32_t num_spectra,
+             std::vector<std::string> endpoints);
   virtual ~XspressDAQ();
   void set_num_aux_data(uint32_t num_aux_data);
   boost::shared_ptr<XspressDAQTask> create_task(uint32_t type);
@@ -68,7 +68,8 @@ public:
   void workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > queue,
                 int index,
                 int channel_index,
-                int num_channels);
+                int num_channels,
+                const std::string& endpoint);
 
 private:
   /** libxspress wrapper object ptr */

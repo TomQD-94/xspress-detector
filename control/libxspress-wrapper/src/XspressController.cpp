@@ -39,6 +39,10 @@ const std::string XspressController::CONFIG_XSP_DEBOUNCE          = "debounce";
 const std::string XspressController::CONFIG_XSP_EXPOSURE_TIME     = "exposure_time";
 const std::string XspressController::CONFIG_XSP_FRAMES            = "frames";
 
+const std::string XspressController::CONFIG_DAQ                   = "daq";
+const std::string XspressController::CONFIG_DAQ_ENABLED           = "enabled";
+const std::string XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS     = "endpoints";
+
 const std::string XspressController::CONFIG_CMD                   = "cmd";
 const std::string XspressController::CONFIG_CMD_CONNECT           = "connect";
 const std::string XspressController::CONFIG_CMD_SAVE              = "save";
@@ -246,6 +250,12 @@ void XspressController::configure(OdinData::IpcMessage& config, OdinData::IpcMes
     this->configureXsp(xspConfig, reply);
   }
 
+  // Check to see if we are configuring the DAQ interface
+  if (config.has_param(XspressController::CONFIG_DAQ)) {
+    OdinData::IpcMessage daqConfig(config.get_param<const rapidjson::Value&>(XspressController::CONFIG_DAQ));
+    this->configureDAQ(daqConfig, reply);
+  }
+
   // Check to see if we have received a command
   if (config.has_param(XspressController::CONFIG_CMD)) {
     OdinData::IpcMessage cmdConfig(config.get_param<const rapidjson::Value&>(XspressController::CONFIG_CMD));
@@ -381,6 +391,38 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     xsp_.setXspFrames(frames);
   }
 
+}
+
+/**
+ * Set configuration options for the Xspress DAQ class.
+ *
+ * \param[in] config - IpcMessage containing configuration data.
+ * \param[out] reply - Response IpcMessage.
+ */
+void XspressController::configureDAQ(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
+{
+  // Check if the DAQ endpoints have been specified
+  if (config.has_param(XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS)) {
+    const rapidjson::Value& val = config.get_param<const rapidjson::Value&>(XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS);
+    // Create the vector of endpoints
+    std::vector<std::string> eps;
+    for (rapidjson::SizeType i = 0; i < val.Size(); i++) {
+      const rapidjson::Value& ep = val[i];
+      std::string sep = ep.GetString();
+      LOG4CXX_DEBUG_LEVEL(1, logger_, "Adding DAQ endpoint [" << sep << "]");
+      eps.push_back(sep);
+    }
+    xsp_.setXspDAQEndpoints(eps);
+  }
+
+  // Check if DAQ is to be enabled
+  if (config.has_param(XspressController::CONFIG_DAQ_ENABLED)){
+    bool enable_daq = config.get_param<bool>(XspressController::CONFIG_DAQ_ENABLED);
+    if (enable_daq){
+      LOG4CXX_DEBUG_LEVEL(1, logger_, "Enable DAQ requested");
+      xsp_.enableDAQ();
+    }
+  }
 }
 
 /**

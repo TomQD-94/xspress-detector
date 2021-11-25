@@ -32,7 +32,7 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_config_path_(""),
     xsp_config_save_path_(""),
     xsp_use_resgrades_(false),
-    xsp_num_aux_data_(0),
+    xsp_num_aux_data_(1),
     xsp_run_flags_(0),
     xsp_dtc_params_updated_(false),
     xsp_dtc_energy_(0.0),
@@ -85,7 +85,7 @@ int XspressDetector::connect()
     } else {
       // Call the detector configure method
       status = detector_.configure(
-        xsp_num_cards_,                  // Number of XSPRESS cards
+        xsp_num_cards_,                            // Number of XSPRESS cards
         xsp_num_tf_,                               // Number of 4096 energy bin spectra timeframes
         const_cast<char *>(xsp_base_IP_.c_str()),  // Base IP address
         -1,                                        // Base port number override (-1 does not override)
@@ -98,8 +98,6 @@ int XspressDetector::connect()
       // We have a valid handle to set the connected status
       LOG4CXX_INFO(logger_, "Connected to Xspress");
       connected_ = true;
-      // Construct the DAQ object (currently hardcoded to 36 threads)
-      daq_ = boost::shared_ptr<XspressDAQ>(new XspressDAQ(&detector_, xsp_max_channels_, 9, xsp_max_spectra_));
     }
   }
   return status;
@@ -117,6 +115,27 @@ int XspressDetector::setupChannels()
     status = detector_.check_connected_channels(cards_connected_, channels_connected_);
   } else {
     LOG4CXX_INFO(logger_, "Cannot set up channels as not connected");
+  }
+  return status;
+}
+
+int XspressDetector::enableDAQ()
+{
+  int status = XSP_STATUS_OK;
+  if (checkConnected()){
+    if (xsp_daq_endpoints_.size() > 0){
+      LOG4CXX_INFO(logger_, "XspressDetector creating DAQ object");
+      // Create the DAQ object
+      daq_ = boost::shared_ptr<XspressDAQ>(new XspressDAQ(&detector_, xsp_max_channels_, xsp_max_spectra_, xsp_daq_endpoints_));
+      // Setup DAQ object with num_aux_data
+      daq_->set_num_aux_data(xsp_num_aux_data_);
+    } else {
+      LOG4CXX_ERROR(logger_, "Cannot set up DAQ as no endpoints have been specified");
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    LOG4CXX_ERROR(logger_, "Cannot set up DAQ as not connected");
+    status = XSP_STATUS_ERROR;
   }
   return status;
 }
@@ -197,8 +216,11 @@ int XspressDetector::restoreSettings()
     status = detector_.setup_resgrades(xsp_use_resgrades_, xsp_max_channels_, xsp_num_aux_data_);
     if (status == XSP_STATUS_OK){
       LOG4CXX_DEBUG_LEVEL(1, logger_, "xsp_num_aux_data set to " << xsp_num_aux_data_);
-      // Setup DAQ object with num_aux_data
-      daq_->set_num_aux_data(xsp_num_aux_data_);
+      // If the DAQ object exists then setup the aux_data value
+      if (daq_){
+        // Setup DAQ object with num_aux_data
+        daq_->set_num_aux_data(xsp_num_aux_data_);
+      }
     } else {
       setErrorString(detector_.getErrorString());
     }
@@ -359,8 +381,10 @@ int XspressDetector::startAcquisition()
   }
 
   if (status == XSP_STATUS_OK){
-    // Prime the DAQ threads with the expected number of frames
-    daq_->startAcquisition(xsp_frames_);
+    // If the DAQ object exists prime the DAQ threads with the expected number of frames
+    if (daq_){
+      daq_->startAcquisition(xsp_frames_);
+    }
 
     LOG4CXX_INFO(logger_, "Arm complete, detector ready for acquisition");
     acquiring_ = true;
@@ -598,6 +622,16 @@ void XspressDetector::setXspFrames(int frames)
 int XspressDetector::getXspFrames()
 {
   return xsp_frames_;
+}
+
+void XspressDetector::setXspDAQEndpoints(std::vector<std::string> endpoints)
+{
+  xsp_daq_endpoints_ = endpoints;
+}
+
+std::vector<std::string> XspressDetector::getXspDAQEndpoints()
+{
+  return xsp_daq_endpoints_;
 }
 
 } /* namespace Xspress */
