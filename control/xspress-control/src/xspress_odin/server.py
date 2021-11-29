@@ -12,13 +12,6 @@ import logging
 import signal
 import threading
 
-try:
-    from zmq.eventloop import ioloop
-    ioloop.install()
-    using_zmq_loop = True
-except ImportError:   # pragma: no cover
-    using_zmq_loop = False
-
 import tornado.ioloop
 
 from odin.http.server import HttpServer
@@ -85,7 +78,6 @@ def main(argv=None):
         adapters = {}
 
     logging.info('Launching Xspress ODIN instance')
-    logging.info('Using the %s IOLoop instance', '0MQ' if using_zmq_loop else 'tornado')
 
     # Launch the HTTP server
     http_server = HttpServer(config.debug_mode, config.access_logging,
