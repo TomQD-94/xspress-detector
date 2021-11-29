@@ -18,7 +18,9 @@
                 "/dls_sw/prod/R3.14.12.7/support/ADCore/3-9dls2/include",
                 "control/libxspress-wrapper/include",
                 "control/libxspress-wrapper/support",
-                "/dls/science/users/ovs72384/xspress-detector/control/libxspress-wrapper/include"
+                "/dls/science/users/ovs72384/xspress-detector/control/libxspress-wrapper/include",
+                "/dls_sw/prod/tools/RHEL7-x86_64/odin-data/1-7-0dls1/common/include",
+                "/dls_sw/prod/tools/RHEL7-x86_64/odin-data/1-7-0dls1/common/src"
             ]
         }
     ],
