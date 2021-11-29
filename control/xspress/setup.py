@@ -23,8 +23,8 @@ setup(
     install_requires=[
         # "odin-data",
         # "odin-control",
-        "pyzmq",
-        "tornado",
+        "pyzmq==22.3.0",
+        "tornado==6.1",
     ],
     entry_points={
         'console_scripts': [

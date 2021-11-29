@@ -6,8 +6,8 @@ name = "pypi"
 [packages]
 odin-data = {file = "file:///dls/science/users/ovs72384/support-modules/odin-data/1-7-0dls1/tools/python"}
 odin-control = {file = "file:///dls/science/users/ovs72384/support-modules/odin-control/1-1-0dls1"}
-pyzmq = "*"
-tornado = "*"
+pyzmq = "22.3.0"
+tornado = "6.1"
 xspress-detector = {editable = true, path = "."}
 
 [dev-packages]
