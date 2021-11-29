@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c89",
+            "cppStandard": "c++11",
+            "intelliSenseMode": "linux-gcc-x64",
+            "includePath": [
+                "/dls/science/users/ovs72384/det-software/none_vme/xspress3/include",
+                "/dls/science/users/ovs72384/det-software/none_vme/xspress3/lib",
+                "/dls_sw/epics/R3.14.12.7/base/include",
+                "/dls_sw/epics/R3.14.12.7/base/src/libCom/osi/os/Linux",
+                "/dls_sw/epics/R3.14.12.7/base/include/os/Linux",
+                "/dls_sw/prod/R3.14.12.7/support/asyn/4-39/include",
+                "/dls_sw/prod/R3.14.12.7/support/calc/3-7-3/include",
+                "/dls_sw/prod/R3.14.12.7/support/ADCore/3-9dls2/include",
+                "control/libxspress-wrapper/include",
+                "control/libxspress-wrapper/support",
+                "/dls/science/users/ovs72384/xspress-detector/control/libxspress-wrapper/include"
+            ]
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,2 @@
+/dls_sw/prod/tools/RHEL7-x86_64/odin-data/1-7-0dls1/tools/python
+/dls_sw/prod/common/python/RHEL7-x86_64/odin-control/1-1-0dls1

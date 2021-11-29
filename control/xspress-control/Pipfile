@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+odin-data = {file = "file:///dls_sw/prod/tools/RHEL7-x86_64/odin-data/1-7-0dls1/tools/python"}
+odin-control = {file = "file:///dls_sw/prod/common/python/RHEL7-x86_64/odin-control/1-1-0dls1"}
+pyzmq = "*"
+tornado = "*"
+xspress-detector = {editable = true, path = "."}
+
+[dev-packages]
+
+[pipenv]
+allow_prereleases = true
