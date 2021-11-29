@@ -26,8 +26,9 @@ ENDPOINT_TEMPLATE = "tcp://{}:{}"
 
 class MessageType(Enum):
     CMD = 1
-    CONFIG = 2
+    CONFIG_XSP = 2
     REQUEST = 3
+    CONFIG_ROOT = 4
 
 class XspressTriggerMode:
     TM_SOFTWARE            = 0
@@ -154,7 +155,7 @@ class XspressDetector(object):
         self.ctrl_enpoint_connected: bool = False
         self.xsp_connected: bool = False
 
-        # upper level parameter tree members
+        # root level parameter tree members
         self.ctr_endpoint = ENDPOINT_TEMPLATE.format(ip, port)
         self.ctr_debug = 0
 
@@ -175,7 +176,7 @@ class XspressDetector(object):
         self.invert_f0 : bool = None
         self.invert_veto : bool = None
         self.debounce : bool = None # is this a bool I was guessing when writing this?
-        self.exposure_time : double = 0.0
+        self.exposure_time : float = 0.0
         self.frames : int = 0
 
         # daq parameter tree members
@@ -196,19 +197,47 @@ class XspressDetector(object):
             }
         }
         self.parameter_tree = ParameterTree(tree)
+        put_tree = \
+        {
+            XspressDetectorStr.CONFIG_DEBUG : (None, partial(self._put, MessageType.CONFIG_ROOT, XspressDetectorStr.CONFIG_DEBUG), {}),
+            XspressDetectorStr.CONFIG_CTRL_ENDPOINT: (None, partial(self._put, MessageType.CONFIG_ROOT, XspressDetectorStr.CONFIG_CTRL_ENDPOINT), {}),
+            XspressDetectorStr.CONFIG_XSP :
+            {
+                XspressDetectorStr.CONFIG_XSP_BASE_IP : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_BASE_IP), {}),
+                XspressDetectorStr.CONFIG_XSP_CONFIG_PATH : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_CONFIG_PATH), {}),
+            }
+        }
+        self.put_parameter_tree = ParameterTree(put_tree)
+
 
     def _set(self, attr_name, value):
         setattr(self, attr_name, value)
+    
+    def _put(self, message_type: MessageType, config_str: str,  value: any):
+        if message_type == MessageType.CONFIG_ROOT:
+            msg = self._build_message_single(config_str, value)
+        else:
+            msg = self._build_message(message_type, value)
+        self._async_client.send_requst(msg)
+
+    def put(self, path: str, data):
+        try:
+            self.put_parameter_tree.set(path, data)
+            return {'async_message sent': None}
+        except ParameterTreeError as e:
+            logging.error(f"parameter_tree error: {e}")
+            raise XspressDetectorException(e)
+
 
     def get(self, path):
         try:
             return self.parameter_tree.get(path)
         except ParameterTreeError as e:
-            log.error(f"parameter_tree error: {e}")
+            logging.error(f"parameter_tree error: {e}")
             raise XspressDetectorException(e)
 
     def on_recv_callback(self, msg):
-        ADAPTER_BASE_PATH = ""
+        BASE_PATH = ""
         data = _cast_str(msg[0])
         logging.debug(f"queue size = {self._async_client.queue_size}")
         logging.debug(f"message recieved = {data}")
@@ -218,7 +247,7 @@ class XspressDetector(object):
             raise XspressDetectorException("IpcMessage recieved is not valid")
         if ipc_msg.get_msg_val() == XspressDetectorStr.CONFIG_REQUEST:
             if ipc_msg.get_msg_type() == IpcMessage.ACK and ipc_msg.get_params():
-                self._param_tree_set_recursive(ADAPTER_BASE_PATH, ipc_msg.get_params())
+                self._param_tree_set_recursive(BASE_PATH, ipc_msg.get_params())
             else:
                 pass
 
@@ -253,7 +282,7 @@ class XspressDetector(object):
             "debug" : self.debug,
             "run_flags": 2,
         }
-        config_msg = self._build_config_message(MessageType.CONFIG, config)
+        config_msg = self._build_message(MessageType.CONFIG_XSP, config)
         self._async_client.send_requst(config_msg)
         # success, _ = self._client._send_message(config_msg, timeout=self.timeout)
 
@@ -267,12 +296,12 @@ class XspressDetector(object):
         from zmq.eventloop.ioloop import IOLoop
         main_loop = IOLoop.current()
         logging.warning(f"main_loop type = {type(main_loop)}")
-        sched = tornado.ioloop.PeriodicCallback(self.read_config, 2000)
+        sched = tornado.ioloop.PeriodicCallback(self.read_config, 5000)
         sched.start()
 
     def _connect(self):
         command = { "connect": None }
-        command_message = self._build_config_message(MessageType.CMD, command)
+        command_message = self._build_message(MessageType.CMD, command)
 
         self._async_client.send_requst(command_message)
         # success, _ = self._client.send_configuration(command_message, target=XspressDetectorStr.CONFIG_CMD)
@@ -286,54 +315,29 @@ class XspressDetector(object):
 
     def _restore(self):
         command = { "restore": None }
-        command_message = self._build_config_message(MessageType.CMD, command)
+        command_message = self._build_message(MessageType.CMD, command)
         # success, reply =  self._client.send_configuration(command_message, target=XspressDetectorStr.CONFIG_CMD)
         self._async_client.send_requst(command_message)
 
-    def _build_config_message(self, message_type: MessageType, config: dict = None):
-        if message_type == MessageType.CONFIG:
-            params_group = "xsp"
-        elif message_type == MessageType.REQUEST:
+    def _build_message_single(self, param_str: str, value: any):
+        msg = IpcMessage("cmd", "configure")
+        msg.set_param(param_str, value)
+        return msg
+
+    def _build_message(self, message_type: MessageType, config: dict = None):
+        if message_type == MessageType.REQUEST:
             msg = IpcMessage("cmd", "request_configuration")
             return msg
+        elif message_type == MessageType.CONFIG_XSP:
+            params_group = "xsp"
         elif message_type == MessageType.CMD:
             params_group = "cmd"
         else:
             raise XspressDetectorException(f"XspressDetector._build_config_message: {message_type} is not type MessageType")
-        params = {}
-        for k, v in config.items():
-            params[k] = v
-
         msg = IpcMessage("cmd", "configure")
-        msg.set_param(params_group, params)
+        msg.set_param(params_group, config)
         return msg
 
     def read_config(self):
-        self._async_client.send_requst(self._build_config_message(MessageType.REQUEST))
-
-
-def main():
-    params = {
-        "base_ip": "192.168.0.1",
-        "num_cards": 4,
-        'max_channels': 36,
-        "num_tf": 16384,
-        "config_path": "/dls_sw/b18/epics/xspress4/xspress4.36chan_pb/settings",
-        "run_flags": 2,
-        "trigger_mode": XspressTriggerMode.TM_BURST,
-        "frames": 121212121,
-        "exposure_time": 999.20,
-    }
-    config_msg = XspressConfigMessage(params).get_message()
-    xsp = XspressDetector("127.0.0.1", 12000)
-    print(xsp.write_config(config_msg))
-    print(xsp.read_config())
-    print(xsp.send_command(XspressConfigMessage({"": None}).get_message()))
-    # print(xsp.send_command(XspressCommandMessage({"stop": None}).get_message()))
-    # print(xsp.send_command(XspressCommandMessage({"trigger": None}).get_message()))
-
-
-
-if __name__ == '__main__':
-    main()
+        self._async_client.send_requst(self._build_message(MessageType.REQUEST))
 

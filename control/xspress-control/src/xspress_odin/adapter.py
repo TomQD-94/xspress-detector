@@ -4,6 +4,7 @@ adapter.py - EXCALIBUR API adapter for the ODIN server.
 Tim Nicholls, STFC Application Engineering Group
 """
 
+import traceback
 import logging
 import re
 from tornado.escape import json_decode
@@ -61,8 +62,8 @@ class XspressAdapter(ApiAdapter):
             logging.debug('done configuring detector')
         except XspressDetectorException as e:
             logging.error('XspressAdapter failed to initialise detector: %s', e)
-        # except Exception as e:
-        #     logging.error('Unhandled Exception: %s', e)
+        except Exception as e:
+            logging.error('Unhandled Exception:\n %s', traceback.format_exc())
         logging.info('exiting XspressAdapter.__init__')
 
     @request_types('application/json')
@@ -77,6 +78,7 @@ class XspressAdapter(ApiAdapter):
         :param request: Tornado HTTP request object
         :return: ApiAdapterResponse object to be returned to the client
         """
+        logging.debug(f"XspressAdapter.get called with path: {path}")
         try:
             response = self.detector.get(path)
             status_code = 200
@@ -103,16 +105,19 @@ class XspressAdapter(ApiAdapter):
         logging.debug("%s", request.body)
         try:
             data = json_decode(request.body)
-            self.detector.set(path, data)
-            response = self.detector.get(path)
+            response = self.detector.put(path, data)
             status_code = 200
         except ConnectionError as e:
             response = {'error': str(e)}
             status_code = 400
             logging.error(e)
         except (TypeError, ValueError) as e:
-            response = {'error': 'Failed to decode PUT request body: {}'.format(str(e))}
-            logging.error(e)
+            response = {'error': 'Failed to decode PUT request body {}:\n {}'.format(data, e)}
+            logging.error(traceback.format_exc())
+            status_code = 400
+        except Exception as e:
+            logging.error(traceback.format_exc())
+            response = {'error' : 'Unhandled exception :{}'.format(e)}
             status_code = 400
 
         return ApiAdapterResponse(response, status_code=status_code)
