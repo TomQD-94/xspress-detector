@@ -10,6 +10,7 @@ import tornado
 import datetime
 
 
+from time import sleep
 from enum import Enum
 from functools import partial
 
@@ -23,6 +24,10 @@ from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
+QUEUE_SIZE_LIMIT = 10
+UPDATE_PARAMS_PERIOD_MILLI_SECONDS = 1000//1
+
+
 
 class MessageType(Enum):
     CMD = 1
@@ -98,7 +103,7 @@ class XspressClient:
         io_loop = tornado.ioloop.IOLoop.current()
         self.stream = ZMQStream(self.socket, io_loop=io_loop)
         self.callback = callback
-        self.register_callback(self.callback)
+        self.register_on_recv_callback(self.callback)
         self.stream.on_send(self._on_send_callback)
 
         self.message_id = 0
@@ -124,17 +129,27 @@ class XspressClient:
     def _on_send_callback(self, msg, status):
         self.queue_size += 1
 
-    def register_callback(self, callback):
+    def get_queue_size(self):
+        return self.queue_size
+
+    def register_on_recv_callback(self, callback):
         def wrap(msg):
             self.queue_size -= 1
             callback(msg)
         self.stream.on_recv(wrap)
 
+    def register_on_send_callback(self, callback):
+        def wrap(msg, status):
+            self.queue_size += 1
+            callback(msg, status)
+        self.stream.on_send(wrap)
+
     def send_command(self, msg):
         pass
 
     def send_requst(self, msg: IpcMessage):
-        self.stream.flush()
+        n_flushed = self.stream.flush() # This is probably not needed
+        logging.debug("number of events flushed: {}".format(n_flushed))
         msg.set_msg_id(self.message_id)
         self.message_id = (self.message_id + 1) % self.MESSAGE_ID_MAX
         logging.info("Sending message:\n%s", msg.encode())
@@ -149,11 +164,13 @@ class XspressDetector(object):
     def __init__(self, ip: str, port: int, dubug=logging.ERROR):
         logging.getLogger().setLevel(logging.DEBUG)
 
-        self._client = IpcClient(ip, port) # calls zmq_sock.connect() so might throw?
+        self._sync_client = IpcClient(ip, port) # calls zmq_sock.connect() so might throw?
         self._async_client = XspressClient(ip, port, callback=self.on_recv_callback)
+        self._async_client.register_on_send_callback(self.on_send_callback)
         self.timeout = 1
         self.ctrl_enpoint_connected: bool = False
         self.xsp_connected: bool = False
+        self.sched = tornado.ioloop.PeriodicCallback(self.read_config, UPDATE_PARAMS_PERIOD_MILLI_SECONDS)
 
         # root level parameter tree members
         self.ctr_endpoint = ENDPOINT_TEMPLATE.format(ip, port)
@@ -212,7 +229,7 @@ class XspressDetector(object):
 
     def _set(self, attr_name, value):
         setattr(self, attr_name, value)
-    
+
     def _put(self, message_type: MessageType, config_str: str,  value: any):
         if message_type == MessageType.CONFIG_ROOT:
             msg = self._build_message_single(config_str, value)
@@ -236,10 +253,23 @@ class XspressDetector(object):
             logging.error(f"parameter_tree error: {e}")
             raise XspressDetectorException(e)
 
+    def _stop_periodic_callbacks_till_queue_is_cleared(self):
+        if self._async_client.get_queue_size() > QUEUE_SIZE_LIMIT:
+            if self.sched.is_running():
+                logging.error("Queue size exceeded maximmum limit of {}.\n\tCurrent queue size: {}".format(QUEUE_SIZE_LIMIT, self._async_client.get_queue_size()))
+                self.sched.stop()
+        else:
+            if not self.sched.is_running():
+                self.sched.start()
+
+    def on_send_callback(self, msg, status):
+        self._stop_periodic_callbacks_till_queue_is_cleared()
+
     def on_recv_callback(self, msg):
+        self._stop_periodic_callbacks_till_queue_is_cleared()
         BASE_PATH = ""
         data = _cast_str(msg[0])
-        logging.debug(f"queue size = {self._async_client.queue_size}")
+        logging.debug(f"queue size = {self._async_client.get_queue_size()}")
         logging.debug(f"message recieved = {data}")
         ipc_msg = IpcMessage(from_str=data)
 
@@ -254,7 +284,6 @@ class XspressDetector(object):
     def _param_tree_set_recursive(self, path, params):
         if not isinstance(params, dict):
             try:
-                # logging.debug(f"XspressDetector._param_tree_set_recursive: calling self.parameter_tree.set({path},{params})")
                 path = path.strip("/")
                 self.parameter_tree.set(path, params)
                 logging.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
@@ -284,20 +313,11 @@ class XspressDetector(object):
         }
         config_msg = self._build_message(MessageType.CONFIG_XSP, config)
         self._async_client.send_requst(config_msg)
-        # success, _ = self._client._send_message(config_msg, timeout=self.timeout)
 
-        # if not success:
-        #     self.connected = False
-            # raise XspressDetectorException("Failed to write configuration parameters to the control server")
+        # self._connect() # uncomment this when ready to test with real XSP
+        self.sched.start()
 
-        # self._connect()
 
-        self.read_config()
-        from zmq.eventloop.ioloop import IOLoop
-        main_loop = IOLoop.current()
-        logging.warning(f"main_loop type = {type(main_loop)}")
-        sched = tornado.ioloop.PeriodicCallback(self.read_config, 5000)
-        sched.start()
 
     def _connect(self):
         command = { "connect": None }
