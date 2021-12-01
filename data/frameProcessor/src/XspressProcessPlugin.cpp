@@ -200,6 +200,10 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
 
   if (frame_id == 0){
     LOG4CXX_INFO(logger_, "First frame received");
+    LOG4CXX_INFO(logger_, "  First channel index: " << header->first_channel);
+    LOG4CXX_INFO(logger_, "  Number of channels: " << header->num_channels);
+    LOG4CXX_INFO(logger_, "  Number of scalars: " << header->num_scalars);
+    LOG4CXX_INFO(logger_, "  Number of resgrades: " << header->num_aux);
   }
 
   // Check the number of channels.  If the number of channels is different
@@ -225,6 +229,24 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   uint32_t num_scalar_values = header->num_scalars * header->num_channels;
   uint32_t num_dtc_factors = header->num_channels;
   uint32_t num_inp_est = header->num_channels;
+  uint32_t first_channel_index = header->first_channel;
+
+  char *raw_sca_ptr = frame_bytes;
+  raw_sca_ptr += sizeof(FrameHeader); 
+  uint32_t *sca_ptr = (uint32_t *)raw_sca_ptr;
+  for (int cindex = 0; cindex < num_channels_; cindex++){
+    LOG4CXX_INFO(logger_, "Scalers " << sca_ptr[0] <<
+                          " " << sca_ptr[1] <<
+                          " " << sca_ptr[2] <<
+                          " " << sca_ptr[3] <<
+                          " " << sca_ptr[4] <<
+                          " " << sca_ptr[5] <<
+                          " " << sca_ptr[6] <<
+                          " " << sca_ptr[7] <<
+                          " " << sca_ptr[8]);
+    sca_ptr += 9;
+  }
+
 
   char *mca_ptr = frame_bytes;
   mca_ptr += (sizeof(FrameHeader) + 

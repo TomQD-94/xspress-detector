@@ -24,8 +24,9 @@ typedef struct
   uint32_t num_aux;
   uint32_t num_channels;
   uint32_t num_scalars;
-  double dead_time_energy;
-  double clock_period;
+  uint32_t first_channel;
+  //double dead_time_energy;
+  //double clock_period;
 } FrameHeader;
 
 #endif //_XSPRESS3DEFINITIONS_EPICS_H

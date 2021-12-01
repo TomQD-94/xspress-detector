@@ -10,7 +10,7 @@
 #include "XspressDAQ.h"
 #include "DebugLevelLogger.h"
 
-#define HEADER_ITEMS 5
+#define HEADER_ITEMS 6
 
 void free_frame(void *data, void *hint)
 {
@@ -228,6 +228,8 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
           // 1 x uint32 => Num spectra
           // 1 x uint32 => Num aux data
           // 1 x uint32 => Num channels
+          // 1 x uint32 => Num scalars
+          // 1 x uint32 => First channel index
           // Frame data [num_spectra x num_channels x num_aux_data x uint32]
           unsigned char *base_ptr;
           uint32_t *frame_ptr = (uint32_t *)malloc(frame_size);
@@ -257,6 +259,7 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
           h_ptr[2] = num_aux_data_;
           h_ptr[3] = num_channels;
           h_ptr[4] = num_scalars;
+          h_ptr[5] = channel_index;
 
           // Perform the single frame memcpy
           status = detector_->histogram_memcpy(d_ptr,
@@ -283,6 +286,19 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
                                                     1,
                                                     channel_index,
                                                     num_channels);
+
+          for (int tind = 0; tind < 4; tind++){
+            LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] Scalers [" << channel_index+tind << 
+                                    "] " << s_ptr[(tind*9)+0] <<
+                                    " " << s_ptr[(tind*9)+1] <<
+                                    " " << s_ptr[(tind*9)+2] <<
+                                    " " << s_ptr[(tind*9)+3] <<
+                                    " " << s_ptr[(tind*9)+4] <<
+                                    " " << s_ptr[(tind*9)+5] <<
+                                    " " << s_ptr[(tind*9)+6] <<
+                                    " " << s_ptr[(tind*9)+7] <<
+                                    " " << s_ptr[(tind*9)+8]);
+          }
 
 //        for (int cindex = 0; cindex < num_channels; cindex++){
 //            int total = 0;
