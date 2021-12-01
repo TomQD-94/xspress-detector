@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from odin_data.ipc_client import IpcClient
 from odin_data.ipc_message import IpcMessage
 from zmq.eventloop.zmqstream import ZMQStream
+from zmq.utils.monitor import parse_monitor_message
 from zmq.utils.strtypes import unicode, cast_bytes
 from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
@@ -25,9 +26,14 @@ from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
 QUEUE_SIZE_LIMIT = 10
-UPDATE_PARAMS_PERIOD_MILLI_SECONDS = 1000//1
+UPDATE_PARAMS_PERIOD_MILLI_SECONDS = 5000//1
 
-
+EVENT_MAP = {}
+for name in dir(zmq):
+    if name.startswith('EVENT_'):
+        value = getattr(zmq, name)
+        print("%21s : %4i" % (name, value))
+        EVENT_MAP[value] = name
 
 class MessageType(Enum):
     CMD = 1
@@ -94,11 +100,13 @@ class XspressClient:
         self.ip = ip
         self.port = port
         self.endpoint = ENDPOINT_TEMPLATE.format(ip, port)
+        self.connected = False
 
         self.context = zmq.Context.instance()
         self.socket = self.context.socket(zmq.DEALER)
         self.socket.setsockopt(zmq.IDENTITY, self._generate_identity())  # pylint: disable=no-member
         self.socket.connect(self.endpoint)
+        self.monitor_socket = self.socket.get_monitor_socket()
 
         io_loop = tornado.ioloop.IOLoop.current()
         self.stream = ZMQStream(self.socket, io_loop=io_loop)
@@ -106,9 +114,24 @@ class XspressClient:
         self.register_on_recv_callback(self.callback)
         self.stream.on_send(self._on_send_callback)
 
+        self.monitor_stream = ZMQStream(self.monitor_socket, io_loop=io_loop)
+        self.monitor_stream.on_recv(self._monitor_on_recv_callback)
+
         self.message_id = 0
         self.queue_size = 0
 
+    def _monitor_on_recv_callback(self, msg):
+        msg = parse_monitor_message(msg)
+        msg.update({'description': EVENT_MAP[msg['event']]})
+        event_type = msg['event']
+        if event_type & (zmq.EVENT_CONNECTED | zmq.EVENT_HANDSHAKE_SUCCEEDED):
+            self.connected == True
+            logging.info("Control Server is Connected")
+        elif event_type & zmq.EVENT_DISCONNECTED:
+            self.connected == False
+            logging.info("Control Server is Disconnected")
+
+        logging.info("Monitor msg: {}".format(msg))
 
     def _generate_identity(self):
         identity = "{:04x}-{:04x}".format(
