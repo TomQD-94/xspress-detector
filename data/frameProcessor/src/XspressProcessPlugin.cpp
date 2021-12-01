@@ -9,13 +9,15 @@
 
 namespace FrameProcessor {
 
-const std::string XspressProcessPlugin::CONFIG_DTC_FLAGS = "dtc/flags";
+const std::string XspressProcessPlugin::CONFIG_FRAMES =     "frames";
+const std::string XspressProcessPlugin::CONFIG_DTC_FLAGS =  "dtc/flags";
 const std::string XspressProcessPlugin::CONFIG_DTC_PARAMS = "dtc/params";
 
 
 XspressMemoryBlock::XspressMemoryBlock() :
   ptr_(0),
   num_bytes_(0),
+  filled_size_(0),
   frames_(0),
   max_frames_(0),
   frame_size_(0)
@@ -54,6 +56,7 @@ void XspressMemoryBlock::reset()
 {
   memset(ptr_, 0, num_bytes_);
   frames_ = 0;
+  filled_size_ = 0;
 }
 
 void XspressMemoryBlock::add_frame(uint32_t frame_id, char *ptr)
@@ -65,6 +68,7 @@ void XspressMemoryBlock::add_frame(uint32_t frame_id, char *ptr)
   dest += (frame_offset * frame_size_);
   memcpy(dest, ptr, frame_size_);
   frames_ += 1;
+  filled_size_ = (frame_offset+1) * frame_size_;
 //  LOG4CXX_INFO(logger_, "Frames [" << frames_ << " / " << max_frames_ << "]");
 }
 
@@ -78,9 +82,19 @@ bool XspressMemoryBlock::check_full()
   return full;
 }
 
+uint32_t XspressMemoryBlock::frames()
+{
+  return frames_;
+}
+
 uint32_t XspressMemoryBlock::size()
 {
   return num_bytes_;
+}
+
+uint32_t XspressMemoryBlock::current_byte_size()
+{
+  return filled_size_;
 }
 
 char *XspressMemoryBlock::get_data_ptr()
@@ -90,6 +104,7 @@ char *XspressMemoryBlock::get_data_ptr()
 
 
 XspressProcessPlugin::XspressProcessPlugin() :
+  num_frames_(1),
   num_energy_bins_(4096),
   num_channels_(0),
   frames_per_block_(256),
@@ -107,6 +122,11 @@ XspressProcessPlugin::~XspressProcessPlugin()
 
 void XspressProcessPlugin::configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply) 
 {
+  if (config.has_param(XspressProcessPlugin::CONFIG_FRAMES)){
+    num_frames_ = config.get_param<unsigned int>(XspressProcessPlugin::CONFIG_FRAMES);
+    LOG4CXX_INFO(logger_, "Number of frames has been set to  " << num_frames_);
+  }
+
 /*         if (dtcParams != NULL) delete [] dtcParams;
          if (dtcFlags != NULL) delete [] dtcFlags;
          const rapidjson::Value& params = config.get_param<const rapidjson::Value&>(CONFIG_DTC_PARAMS);
@@ -269,7 +289,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
 //        mca_dims.push_back(header->num_aux);
         mca_dims.push_back(header->num_energy_bins);
         std::stringstream ss;
-        ss << "mca_" << index;
+        ss << "mca_" << index + first_channel_index;
         FrameMetaData mca_metadata((frame_id / frames_per_block_), ss.str(), raw_32bit, "", mca_dims);
         boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->size()));
         memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->size());
@@ -278,7 +298,24 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
         // Reset the memory block
         memory_ptrs_[index]->reset();
     } else {
-//        LOG4CXX_INFO(logger_, "Memory block not full");
+      LOG4CXX_INFO(logger_, "Frame ID: " << frame_id);
+      // Check if we are writing out the last block which is not full size
+      if (frame_id == (num_frames_-1)){
+        LOG4CXX_INFO(logger_, "num_frames_ - 1: " << (num_frames_-1));
+        dimensions_t mca_dims;
+        mca_dims.push_back(frames_per_block_);
+        mca_dims.push_back(header->num_energy_bins);
+        std::stringstream ss;
+        ss << "mca_" << index + first_channel_index;
+        FrameMetaData mca_metadata((frame_id / frames_per_block_), ss.str(), raw_32bit, "", mca_dims);
+        boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->current_byte_size()));
+        memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->current_byte_size());
+        // Push out the MCA data
+        this->push(mca_frame);
+        // Reset the memory block
+        memory_ptrs_[index]->reset();
+        LOG4CXX_INFO(logger_, "Pushed partially full frame as required frame count reached");
+      }
     }
   }
 }

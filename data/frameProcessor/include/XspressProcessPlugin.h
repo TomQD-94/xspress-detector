@@ -26,12 +26,15 @@ public:
   void reset();
   void add_frame(uint32_t frame_id, char *ptr);
   bool check_full();
+  uint32_t frames();
   uint32_t size();
+  uint32_t current_byte_size();
   char *get_data_ptr();
 
 private:
   char *ptr_;
   uint32_t num_bytes_;
+  uint32_t filled_size_;
   uint32_t frames_;
   uint32_t max_frames_;
   uint32_t frame_size_;
@@ -68,6 +71,7 @@ private:
         // Plugin interface
         void process_frame(boost::shared_ptr <Frame> frame);
 
+        uint32_t num_frames_;
         uint32_t num_energy_bins_;
         uint32_t num_aux_;
         uint32_t num_channels_;
@@ -76,9 +80,11 @@ private:
 
         std::vector<boost::shared_ptr<XspressMemoryBlock> > memory_ptrs_;
 
+        static const std::string CONFIG_FRAMES;
 
         static const std::string CONFIG_DTC_FLAGS;
         static const std::string CONFIG_DTC_PARAMS;
+
 
         /** Pointer to logger */
         LoggerPtr logger_;
