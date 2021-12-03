@@ -82,9 +82,9 @@ class XspressAdapter(ApiAdapter):
         try:
             response = self.detector.get(path)
             status_code = 200
-        except ConnectionError as e:
-            response = {'error': str(e)}
-            logging.error(e)
+        except LookupError as e:
+            response = {'invalid path': str(e)}
+            logging.error(f"XspressAdapter.get: Invalid path: {path}")
             status_code = 400
 
         return ApiAdapterResponse(response, status_code=status_code)

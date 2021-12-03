@@ -7,12 +7,13 @@ import logging
 import zmq
 import random
 import tornado
-import datetime
+import getpass
 
 
 from time import sleep
 from enum import Enum
 from functools import partial
+from datetime import datetime
 
 from abc import ABC, abstractmethod
 from odin_data.ipc_client import IpcClient
@@ -53,6 +54,11 @@ class XspressTriggerMode:
     TM_LVDS_BOTH           = 8
 
 class XspressDetectorStr:
+    CONFIG_ADAPTER_START_TIME    = "start_time"
+    CONFIG_ADAPTER_UP_TIME       = "up_time"
+    CONFIG_ADAPTER_CONNECTED      = "connected"
+    CONFIG_ADAPTER_USERNAME      = "username"
+
     CONFIG_SHUTDOWN              = "shutdown"
     CONFIG_DEBUG                 = "debug_level"
     CONFIG_CTRL_ENDPOINT         = "ctrl_endpoint"
@@ -125,10 +131,10 @@ class XspressClient:
         msg.update({'description': EVENT_MAP[msg['event']]})
         event_type = msg['event']
         if event_type & (zmq.EVENT_CONNECTED | zmq.EVENT_HANDSHAKE_SUCCEEDED):
-            self.connected == True
+            self.connected = True
             logging.info("Control Server is Connected")
         elif event_type & zmq.EVENT_DISCONNECTED:
-            self.connected == False
+            self.connected = False
             logging.info("Control Server is Disconnected")
 
         logging.info("Monitor msg: {}".format(msg))
@@ -181,11 +187,17 @@ class XspressClient:
 
     def send_config(self, msg):
         pass
+    def is_connected(self):
+        return self.connected
 
 class XspressDetector(object):
 
     def __init__(self, ip: str, port: int, dubug=logging.ERROR):
         logging.getLogger().setLevel(logging.DEBUG)
+
+        self.endpoint = ENDPOINT_TEMPLATE.format("0.0.0.0", 12000)
+        self.start_time = datetime.now()
+        self.username = getpass.getuser()
 
         self._sync_client = IpcClient(ip, port) # calls zmq_sock.connect() so might throw?
         self._async_client = XspressClient(ip, port, callback=self.on_recv_callback)
@@ -210,7 +222,7 @@ class XspressDetector(object):
         self.settings_save_path : str = None
         self.use_resgrade : bool = None
         self.run_flags : int = 0
-        self.dtc_energy : int = 0
+        self.dtc_energy : float = 0.0
         self.trigger_mode : XspressTriggerMode = None
         self.num_frames : int = 0
         self.invert_f0 : bool = None
@@ -228,12 +240,32 @@ class XspressDetector(object):
 
         tree = \
         {
+            XspressDetectorStr.CONFIG_ADAPTER_START_TIME: (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
+            XspressDetectorStr.CONFIG_ADAPTER_UP_TIME: (lambda: str(datetime.now() - self.start_time), {}),
+            XspressDetectorStr.CONFIG_ADAPTER_CONNECTED: (lambda: self._async_client.is_connected(), {}),
+            XspressDetectorStr.CONFIG_ADAPTER_USERNAME: (lambda: self.username, {}),
+
             XspressDetectorStr.CONFIG_DEBUG : (lambda: self.ctr_debug, partial(self._set, 'ctr_debug'), {}),
             XspressDetectorStr.CONFIG_CTRL_ENDPOINT: (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
             XspressDetectorStr.CONFIG_XSP :
             {
+                XspressDetectorStr.CONFIG_XSP_NUM_CARDS : (lambda: self.num_cards, partial(self._set, 'num_cards'), {}),
+                XspressDetectorStr.CONFIG_XSP_NUM_TF : (lambda: self.num_tf, partial(self._set, 'num_tf'), {}),
                 XspressDetectorStr.CONFIG_XSP_BASE_IP : (lambda: self.base_ip, partial(self._set, 'base_ip'), {}),
+                XspressDetectorStr.CONFIG_XSP_MAX_CHANNELS : (lambda: self.max_channels, partial(self._set, 'max_channels'), {}),
+                XspressDetectorStr.CONFIG_XSP_MAX_SPECTRA : (lambda: self.max_spectra, partial(self._set, 'max_spectra'), {}),
+                XspressDetectorStr.CONFIG_XSP_DEBUG : (lambda: self.debug, partial(self._set, 'debug'), {}),
                 XspressDetectorStr.CONFIG_XSP_CONFIG_PATH : (lambda: self.settings_path, partial(self._set, "settings_path"), {}),
+                XspressDetectorStr.CONFIG_XSP_CONFIG_SAVE_PATH : (lambda: self.settings_save_path, partial(self._set, "settings_save_path"), {}),
+                XspressDetectorStr.CONFIG_XSP_USE_RESGRADES : (lambda: self.use_resgrade, partial(self._set, "use_resgrade"), {}),
+                XspressDetectorStr.CONFIG_XSP_RUN_FLAGS : (lambda: self.run_flags, partial(self._set, "run_flags"), {}),
+                XspressDetectorStr.CONFIG_XSP_DTC_ENERGY : (lambda: self.dtc_energy, partial(self._set, "dtc_energy"), {}),
+                XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (lambda: self.trigger_mode, partial(self._set, "trigger_mode"), {}),
+                XspressDetectorStr.CONFIG_XSP_INVERT_F0 : (lambda: self.invert_f0, partial(self._set, "invert_f0"), {}),
+                XspressDetectorStr.CONFIG_XSP_INVERT_VETO : (lambda: self.invert_veto, partial(self._set, "invert_veto"), {}),
+                XspressDetectorStr.CONFIG_XSP_DEBOUNCE : (lambda: self.debounce, partial(self._set, "debounce"), {}),
+                XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME : (lambda: self.exposure_time, partial(self._set, "exposure_time"), {}),
+                XspressDetectorStr.CONFIG_XSP_FRAMES : (lambda: self.frames, partial(self._set, "frames"), {}),
             }
         }
         self.parameter_tree = ParameterTree(tree)
@@ -274,7 +306,7 @@ class XspressDetector(object):
             return self.parameter_tree.get(path)
         except ParameterTreeError as e:
             logging.error(f"parameter_tree error: {e}")
-            raise XspressDetectorException(e)
+            raise LookupError(e)
 
     def _stop_periodic_callbacks_till_queue_is_cleared(self):
         if self._async_client.get_queue_size() > QUEUE_SIZE_LIMIT:
@@ -311,7 +343,7 @@ class XspressDetector(object):
                 self.parameter_tree.set(path, params)
                 logging.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
             except ParameterTreeError:
-                # logging.warning(f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree")
+                logging.warning(f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree")
                 pass
         else:
             for param_name, params in params.items():
