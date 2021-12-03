@@ -5,40 +5,41 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
-    <title>Tristan Server</title>
+    <title>Xspress Client Server</title>
 
     <!-- Bootstrap -->
     <link href="js/bootstrap-3.3.7-dist/css/bootstrap.css" rel="stylesheet">
+	<script type="text/javascript" src="https://livejs.com/live.js"></script>
 
   </head>
   <body style="padding-top: 30px;">
-  
+
     <nav class="navbar navbar-inverse navbar-fixed-top">
       <div class="container-fluid">
-        <div class="navbar-header">
-          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
-            <span class="sr-only">Toggle navigation</span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </button>
+	<div class="navbar-header">
+	  <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+	    <span class="sr-only">Toggle navigation</span>
+	    <span class="icon-bar"></span>
+	    <span class="icon-bar"></span>
+	    <span class="icon-bar"></span>
+	  </button>
 			<a class="navbar-brand" rel="home" href="" title="Odin-Data">
-	        <img style="max-width:40px; margin-top: -7px;" src="/img/odin_logo.jpg">
+		<img style="max-width:40px; margin-top: -7px;" src="/img/odin_logo.jpg">
 		    </a>
-          <div class="navbar-brand">Xspress Odin Server</div>
-        </div>
-        <div id="navbar" class="navbar-collapse collapse">
-            <ul class="nav navbar-nav">
-                <li class="home"><a href="#/home-view"> <span
-                        class="glyphicon glyphicon-home"></span> <strong>Home</strong><span
-                        class="label"></span></a></li>
+	  <div class="navbar-brand">Xspress Odin Server</div>
+	</div>
+	<div id="navbar" class="navbar-collapse collapse">
+	    <ul class="nav navbar-nav">
+		<li class="home"><a href="#/home-view"> <span
+			class="glyphicon glyphicon-home"></span> <strong>Home</strong><span
+			class="label"></span></a></li>
 
-                <li class="home"><a href="#/engineering-view"> <span
-                        class="glyphicon glyphicon-home"></span> <strong>Engineering</strong><span
-                        class="label"></span></a></li>
+		<li class="home"><a href="#/engineering-view"> <span
+			class="glyphicon glyphicon-home"></span> <strong>Engineering</strong><span
+			class="label"></span></a></li>
 
 							</ul>
-        </div>
+	</div>
       </div>
     </nav>
 
@@ -67,18 +68,18 @@
 						</div>
 						<div class="row sidebar-row vertical-align">
 							<div class="col-xs-2">Detector Connection:</div>
-							<div class="col-xs-5 status vertical-align">
+							<div class="col-xs-10 status vertical-align">
 								<table>
 									<tr><td width="180px">Username:</td><td width="200px" align="center" id="detector-hw-username"></td></tr>
 									<tr><td>Start Time:</td><td align="center" id="detector-hw-start-time"></td></tr>
 									<tr><td>Up Time:</td><td align="center" id="detector-hw-up-time"></td></tr>
-									<tr><td>Endpoint:</td><td align="center" id="detector-hw-endpoint"></td></tr>
-									<tr><td>Connected:</td><td align="center" id="detector-hw-connected"></td></tr>
+									<tr><td>Control Endpoint:</td><td align="center" id="detector-hw-endpoint"></td></tr>
+									<tr><td>Connected to Control Server:</td><td align="center" id="detector-hw-connected"></td></tr>
 									<tr><td>Description:</td><td align="center" id="detector-hw-description"></td></tr>
 									<tr><td>Firmware Version:</td><td align="center"><div id="detector-hw-version"></div><div id="detector-hw-version-good"></div></td></tr>
 									<tr><td>Exposure:</td><td align="center" id="detector-hw-exposure"></td><td><span><input type="text" id="set-hw-exposure"></input></span></td></tr>
 									<tr><td>Frames:</td><td align="center" id="detector-hw-frames"></td><td><span><input type="text" id="set-hw-frames"></input></span></td></tr>
-									<tr><td>Frames Per Trigger:</td><td align="center" id="detector-hw-frames-per-trigger"></td><td><span><input type="text" id="set-hw-frames-per-trigger"></input></span></td></tr>
+									<tr><td>Trigger Mode:</td><td align="center" id="detector-hw-trigger-mode"></td><td><span><input type="text" id="set-hw-frames-per-trigger"></input></span></td></tr>
 									<tr><td>Mode:</td><td align="center" id="detector-hw-mode"></td><td><select id="set-hw-mode">
 										<option>time_energy</option>
 										<option>time_only</option>
@@ -120,7 +121,7 @@
 										<td><span><button id="fr-reset-cmd">Reset</button></span></td>
 									</tr>
 									<tr id="fp-raw-row"><td width="180px" colspan="2">Decode Mode:</td>
-  								<td colspan="1"><span><button id="fp-config-raw-mode-on">Raw</button></span></td>
+								<td colspan="1"><span><button id="fp-config-raw-mode-on">Raw</button></span></td>
 									<td colspan="1"><span><button id="fp-config-raw-mode-off">Process</button></span></td>
 									</tr>
 									<!--

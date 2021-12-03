@@ -1,7 +1,7 @@
 
 odin_data = {
   api_version: '0.1',
-  ctrl_name: 'xspress',
+  ctrl_name: 'control',
   current_page: '.home-view',
   adapter_list: [],
   adapter_objects: {},
@@ -58,10 +58,10 @@ $( document ).ready(function()
   render(decodeURI(window.location.hash));
 
   setInterval(update_api_version, 5000);
-  setInterval(update_detector_status, 1000);
-  setInterval(update_fp_status, 1000);
-  setInterval(update_fr_status, 1000);
-  setInterval(update_meta_status, 1000);
+  setInterval(update_detector_status, 5000);
+  // setInterval(update_fp_status, 1000);
+  // setInterval(update_fr_status, 1000);
+  // setInterval(update_meta_status, 1000);
 
   $('#set-hw-exposure').change(function(){
     update_exposure();
@@ -71,16 +71,8 @@ $( document ).ready(function()
     update_frames();
   });
 
-  $('#set-hw-frames-per-trigger').change(function(){
-    update_frames_per_trigger();
-  });
-
   $('#set-hw-mode').change(function(){
     update_mode();
-  });
-
-  $('#set-hw-profile').change(function(){
-    update_profile();
   });
 
   $('#detector-arm-cmd').click(function(){
@@ -144,8 +136,8 @@ $( document ).ready(function()
 
   $(window).on('hashchange', function(){
     // On every hash change the render function is called with the new hash.
-	// This is how the navigation of the app is executed.
-	render(decodeURI(window.location.hash));
+        // This is how the navigation of the app is executed.
+        render(decodeURI(window.location.hash));
   });
 });
 
@@ -160,27 +152,17 @@ function update_exposure() {
 
 function update_frames() {
     set_value = $('#set-hw-frames').val();
-    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/frames/' + set_value, process_cmd_response);
-}
-
-function update_frames_per_trigger() {
-    set_value = $('#set-hw-frames-per-trigger').val();
-    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/frames_per_trigger/' + set_value, process_cmd_response);
+    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/xsp/frames/' + set_value, process_cmd_response);
 }
 
 function update_mode() {
     set_value = $('#set-hw-mode').find(":selected").text();
-    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/mode/' + set_value, process_cmd_response);
+    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/xsp/mode/' + set_value, process_cmd_response);
     fp_mode_command(set_value);
 }
 
-function update_profile() {
-    set_value = $('#set-hw-profile').find(":selected").text();
-    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/profile/' + set_value, process_cmd_response);
-}
-
 function ctrl_command(command) {
-    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/command/' + command, process_cmd_response);
+    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/cmd/' + command, process_cmd_response);
 }
 
 function detector_json_put_command()
@@ -189,7 +171,7 @@ function detector_json_put_command()
     {
         value = JSON.stringify(JSON.parse($('#engineering-cmd').val()));
         $.ajax({
-            url: '/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/engineering_put',
+            url: '/api/' + odin_data.api_version + '/' + odin_data.ctrl_name,
             type: 'PUT',
             dataType: 'json',
             data: value,
@@ -213,8 +195,8 @@ function detector_json_get_command()
     {
         value = JSON.stringify(JSON.parse($('#engineering-cmd').val()));
         $.ajax({
-            url: '/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/engineering_get',
-            type: 'PUT',
+            url: '/api/' + odin_data.api_version + '/' + odin_data.ctrl_name ,
+            type: 'GET',
             dataType: 'json',
             data: value,
             headers: {'Content-Type': 'application/json',
@@ -308,13 +290,13 @@ function fr_debug_command() {
 }
 
 function fp_mode_command(mode) {
-    send_fp_command('tristan', JSON.stringify({
+    send_fp_command('xspress', JSON.stringify({
         "mode": mode.toLowerCase()
     }));
 }
 
 function meta_start_command() {
-    send_fp_command('tristan', JSON.stringify({
+    send_fp_command('xspress', JSON.stringify({
         "acq_id": $('#set-fp-filename').val()
     }));
     odin_data.acq_id = $('#set-fp-filename').val();
@@ -337,13 +319,13 @@ function fp_start_command() {
 }
 
 function fp_raw_mode_command() {
-    send_fp_command('tristan', JSON.stringify({
+    send_fp_command('xspress', JSON.stringify({
         "raw_mode": 1
     }));
 }
 
 function fp_process_mode_command() {
-    send_fp_command('tristan', JSON.stringify({
+    send_fp_command('xspress', JSON.stringify({
         "raw_mode": 0
     }));
 }
@@ -371,74 +353,31 @@ function update_api_adapters() {
     });
 }
 
+const TRIGGER_MODE = {
+  0 : "SOFTWARE",
+  1 : "TTL_RISING_EDGE",
+  2 : "BURST",
+  3 : "TTL_VETO_ONLY",
+  4 : "SOFTWARE_START_STOP",
+  5 : "IDC",
+  6 : "TTL_BOTH",
+  7 : "LVDS_VETO_ONLY",
+  8 : "LVDS_BOTH",
+}
+
 function update_detector_status() {
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/username', function(response) {
-//        alert(response.endpoint);
+    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name, function(response) {
+        console.log(response);
         $('#detector-hw-username').html(response.username);
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/start_time', function(response) {
-//        alert(response.endpoint);
         $('#detector-hw-start-time').html(response.start_time);
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/up_time', function(response) {
-//        alert(response.endpoint);
         $('#detector-hw-up-time').html(response.up_time);
+        $('#detector-hw-endpoint').html(response.ctrl_endpoint);
+        $('#detector-hw-connected').html(led_html(''+response['connected'], 'green', 26));
+        $('#detector-hw-exposure').html(response.xsp.exposure_time);
+        $('#detector-hw-frames').html(response.xsp.frames);
+        $('#detector-hw-trigger-mode').html(TRIGGER_MODE[response.xsp.trigger_mode]);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/endpoint', function(response) {
-//        alert(response.endpoint);
-        $('#detector-hw-endpoint').html(response.endpoint);
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/status/connected', function(response) {
-//        alert(response.endpoint);
-        $('#detector-hw-connected').html(led_html(''+response['value'], 'green', 26));
-        if (!response['value']){
-            $('#set-hw-exposure').val('');
-            $('#set-hw-frames').val('');
-            $('#set-hw-frames-per-trigger').val('');
-            $('#detector-hw-version').html('');
-            $('#detector-hw-version-good').html('');
-            $('#detector-hw-description').html('');
-            $('#detector-hw-exposure').html('');
-            $('#detector-hw-frames').html('');
-            $('#detector-hw-frames-per-trigger').html('');
-            $('#detector-hw-mode').html('');
-            $('#detector-hw-profile').html('');
-            odin_data.ctrl_connected = false;
-        } else {
-            odin_data.ctrl_connected = true;
-        }
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/status/detector/software_version', function(response) {
-        if (odin_data.ctrl_connected){
-            $('#detector-hw-version').html(response['value']);
-        }
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/status/detector/version_check', function(response) {
-        if (odin_data.ctrl_connected){
-            $('#detector-hw-version-good').html(led_html(response['value'], 'green', 26));
-        }
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/status/detector/description', function(response) {
-        if (odin_data.ctrl_connected){
-            $('#detector-hw-description').html(response['value']);
-        }
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/status/detector/udp_packets_sent', function(response) {
-        if (odin_data.ctrl_connected){
-            $('#detector-pkts-sent').html(response['value']);
-        }
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/exposure', function(response) {
-        //alert(JSON.stringify(response));
-        if (odin_data.ctrl_connected){
-            $('#detector-hw-exposure').html(response['value']);
-        }
-    });
-    $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/frames', function(response) {
-        if (odin_data.ctrl_connected){
-            $('#detector-hw-frames').html(response['value']);
-        }
-    });
+
     $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/frames_per_trigger', function(response) {
         if (odin_data.ctrl_connected){
             $('#detector-hw-frames-per-trigger').html(response['value']);
@@ -470,11 +409,11 @@ function update_fp_status() {
         //alert(response['value']);
         var no_of_fps = response['value'].length;
         if (odin_data.daq == null){
-            odin_data.daq = new DAQHolder('tristan-daq-container', no_of_fps);
+            odin_data.daq = new DAQHolder('xspress-daq-container', no_of_fps);
             odin_data.daq.init();
         } else {
             if (no_of_fps != odin_data.daq.get_no_of_fps()){
-                odin_data.daq = new DAQHolder('tristan-daq-container', no_of_fps);
+                odin_data.daq = new DAQHolder('xspress-daq-container', no_of_fps);
                 odin_data.daq.init();
             }
         }
@@ -492,31 +431,31 @@ function update_fp_status() {
     $.getJSON('/api/' + odin_data.api_version + '/fp/status/hdf/frames_written', function(response) {
         odin_data.daq.setFPValuesWritten(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/status/tristan/invalid_packets', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/status/xspress/invalid_packets', function(response) {
         odin_data.daq.setFPInvalidPackets(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/status/tristan/timestamp_mismatches', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/status/xspress/timestamp_mismatches', function(response) {
         odin_data.daq.setFPTimestampMismatches(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/status/tristan/processed_jobs', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/status/xspress/processed_jobs', function(response) {
         odin_data.daq.setFPPacketsProcessed(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/status/tristan/job_queue', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/status/xspress/job_queue', function(response) {
         odin_data.daq.setFPJobQueueSize(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/status/tristan/results_queue', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/status/xspress/results_queue', function(response) {
         odin_data.daq.setFPResultsQueueSize(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/status/tristan/processed_frames', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/status/xspress/processed_frames', function(response) {
         odin_data.daq.setFPProcessedFrames(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/status/tristan/output_frames', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/status/xspress/output_frames', function(response) {
         odin_data.daq.setFPOutputFrames(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/config/tristan/mode', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/config/xspress/mode', function(response) {
         odin_data.daq.setFPOperationalMode(response['value']);
     });
-    $.getJSON('/api/' + odin_data.api_version + '/fp/config/tristan/raw_mode', function(response) {
+    $.getJSON('/api/' + odin_data.api_version + '/fp/config/xspress/raw_mode', function(response) {
         odin_data.daq.setFPRawMode(response['value']);
     });
 }
@@ -954,7 +893,7 @@ class DAQHolder {
             this.fp_batch_count = 8;
         }
         this.tab_count = Math.ceil(no_of_fps / this.fp_batch_count) + 1;
-        this.tabs = $('<div id="tristan-daq-tabs"></div>');
+        this.tabs = $('<div id="xspress-daq-tabs"></div>');
         this.list = $('<ul class="nav nav-tabs"></ul>');
         this.bodies = $('<div class="tab-content"></div>');
         this.tabs.append(this.list);
@@ -966,9 +905,9 @@ class DAQHolder {
             if (index == 0){
                 tabtitle = "Overview";
             }
-            var tabheader = $('<li class="nav-item waves-effect waves-light"><a class="nav-link" href="#tristan-daq-tab-' + index + '" data-toggle="tab">' + tabtitle + '</a></li>');
+            var tabheader = $('<li class="nav-item waves-effect waves-light"><a class="nav-link" href="#xspress-daq-tab-' + index + '" data-toggle="tab">' + tabtitle + '</a></li>');
             this.list.append(tabheader);
-            var tabbody = $('<div class="tab-pane" id="tristan-daq-tab-' + index + '"></div>');
+            var tabbody = $('<div class="tab-pane" id="xspress-daq-tab-' + index + '"></div>');
             this.bodies.append(tabbody);
             if (index == 0){
                 this.maintab = new DAQTab(tabbody, index, (this.tab_count-1));
@@ -990,7 +929,7 @@ class DAQHolder {
         for (var tab of this.daqtabs){
             tab.init();
         }
-        $('.nav-tabs a[href="#tristan-daq-tab-0"]').tab('show');
+        $('.nav-tabs a[href="#xspress-daq-tab-0"]').tab('show');
     }
 
     setFRConnected(connected){
@@ -1206,15 +1145,15 @@ function create_tabs(owner, no_of_fps)
         fp_batch_count = 10;
     }
     tab_count = Math.ceil(no_of_fps / fp_batch_count) + 1;
-    var tabs = $('<div id="tristan-daq-tabs"></div>');
+    var tabs = $('<div id="xspress-daq-tabs"></div>');
     var list = $('<ul class="nav nav-tabs"></ul>');
     var bodies = $('<div class="tab-content"></div>');
     tabs.append(list);
     tabs.append(bodies);
     for (index = 0; index < tab_count; index++){
-        var tabheader = $('<li class="nav-item waves-effect waves-light"><a class="nav-link" href="#tristan-daq-tab-' + index + '" data-toggle="tab">Tab ' + index + '</a></li>');
+        var tabheader = $('<li class="nav-item waves-effect waves-light"><a class="nav-link" href="#xspress-daq-tab-' + index + '" data-toggle="tab">Tab ' + index + '</a></li>');
         list.append(tabheader);
-        var tabbody = $('<div class="tab-pane" id="tristan-daq-tab-' + index + '">TEST TEST TEST '+index+'</div>');
+        var tabbody = $('<div class="tab-pane" id="xspress-daq-tab-' + index + '">TEST TEST TEST '+index+'</div>');
         bodies.append(tabbody);
         var dqtab = new DAQTab(tabbody, index);
     }
