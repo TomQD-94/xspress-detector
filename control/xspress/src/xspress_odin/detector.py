@@ -1,16 +1,7 @@
-import os, time
-import argparse
-import json
-import curses
-import os
 import logging
-import zmq
-import random
 import tornado
 import getpass
 
-
-from time import sleep
 from enum import Enum
 from functools import partial
 from datetime import datetime
@@ -24,17 +15,12 @@ from zmq.utils.strtypes import unicode, cast_bytes
 from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 
+from .client import XspressClient
+
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
-QUEUE_SIZE_LIMIT = 10
 UPDATE_PARAMS_PERIOD_MILLI_SECONDS = 5000//1
-
-EVENT_MAP = {}
-for name in dir(zmq):
-    if name.startswith('EVENT_'):
-        value = getattr(zmq, name)
-        print("%21s : %4i" % (name, value))
-        EVENT_MAP[value] = name
+QUEUE_SIZE_LIMIT = 10
 
 class MessageType(Enum):
     CMD = 1
@@ -99,96 +85,6 @@ class XspressDetectorStr:
 class XspressDetectorException(Exception):
     pass
 
-class XspressClient:
-    MESSAGE_ID_MAX = 2**32
-
-    def __init__(self, ip, port, callback=None):
-        self.ip = ip
-        self.port = port
-        self.endpoint = ENDPOINT_TEMPLATE.format(ip, port)
-        self.connected = False
-
-        self.context = zmq.Context.instance()
-        self.socket = self.context.socket(zmq.DEALER)
-        self.socket.setsockopt(zmq.IDENTITY, self._generate_identity())  # pylint: disable=no-member
-        self.socket.connect(self.endpoint)
-        self.monitor_socket = self.socket.get_monitor_socket()
-
-        io_loop = tornado.ioloop.IOLoop.current()
-        self.stream = ZMQStream(self.socket, io_loop=io_loop)
-        self.callback = callback
-        self.register_on_recv_callback(self.callback)
-        self.stream.on_send(self._on_send_callback)
-
-        self.monitor_stream = ZMQStream(self.monitor_socket, io_loop=io_loop)
-        self.monitor_stream.on_recv(self._monitor_on_recv_callback)
-
-        self.message_id = 0
-        self.queue_size = 0
-
-    def _monitor_on_recv_callback(self, msg):
-        msg = parse_monitor_message(msg)
-        msg.update({'description': EVENT_MAP[msg['event']]})
-        event_type = msg['event']
-        if event_type & (zmq.EVENT_CONNECTED | zmq.EVENT_HANDSHAKE_SUCCEEDED):
-            self.connected = True
-            logging.info("Control Server is Connected")
-        elif event_type & zmq.EVENT_DISCONNECTED:
-            self.connected = False
-            logging.info("Control Server is Disconnected")
-
-        logging.info("Monitor msg: {}".format(msg))
-
-    def _generate_identity(self):
-        identity = "{:04x}-{:04x}".format(
-            random.randrange(0x10000), random.randrange(0x10000)
-        )
-        return cast_bytes(identity)
-
-    def test_callback(self, msg):
-        data = _cast_str(msg[0])
-        logging.debug(f"data type = {type(data)}")
-        logging.debug(f"data = {data}")
-        ipc_msg = IpcMessage(from_str=data)
-        logging.debug(f"queue size = {self.queue_size}")
-        logging.debug(f"ZmqMessage: {msg}")
-        logging.debug(f"IpcMessage __dict__: {ipc_msg.__dict__}")
-        logging.debug(f"IpcMessage msg.params: {ipc_msg.get_params()}")
-
-    def _on_send_callback(self, msg, status):
-        self.queue_size += 1
-
-    def get_queue_size(self):
-        return self.queue_size
-
-    def register_on_recv_callback(self, callback):
-        def wrap(msg):
-            self.queue_size -= 1
-            callback(msg)
-        self.stream.on_recv(wrap)
-
-    def register_on_send_callback(self, callback):
-        def wrap(msg, status):
-            self.queue_size += 1
-            callback(msg, status)
-        self.stream.on_send(wrap)
-
-    def send_command(self, msg):
-        pass
-
-    def send_requst(self, msg: IpcMessage):
-        n_flushed = self.stream.flush() # This is probably not needed
-        logging.debug("number of events flushed: {}".format(n_flushed))
-        msg.set_msg_id(self.message_id)
-        self.message_id = (self.message_id + 1) % self.MESSAGE_ID_MAX
-        logging.info("Sending message:\n%s", msg.encode())
-        self.stream.send(cast_bytes(msg.encode()))
-        logging.error(f"queue size = {self.queue_size}")
-
-    def send_config(self, msg):
-        pass
-    def is_connected(self):
-        return self.connected
 
 class XspressDetector(object):
 
@@ -223,7 +119,7 @@ class XspressDetector(object):
         self.use_resgrade : bool = None
         self.run_flags : int = 0
         self.dtc_energy : float = 0.0
-        self.trigger_mode : XspressTriggerMode = None
+        self.trigger_mode : str = ""
         self.num_frames : int = 0
         self.invert_f0 : bool = None
         self.invert_veto : bool = None
@@ -240,32 +136,32 @@ class XspressDetector(object):
 
         tree = \
         {
-            XspressDetectorStr.CONFIG_ADAPTER_START_TIME: (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
-            XspressDetectorStr.CONFIG_ADAPTER_UP_TIME: (lambda: str(datetime.now() - self.start_time), {}),
-            XspressDetectorStr.CONFIG_ADAPTER_CONNECTED: (lambda: self._async_client.is_connected(), {}),
-            XspressDetectorStr.CONFIG_ADAPTER_USERNAME: (lambda: self.username, {}),
+            XspressDetectorStr.CONFIG_ADAPTER_START_TIME:         (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
+            XspressDetectorStr.CONFIG_ADAPTER_UP_TIME:            (lambda: str(datetime.now() - self.start_time), {}),
+            XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:          (lambda: self._async_client.is_connected(), {}),
+            XspressDetectorStr.CONFIG_ADAPTER_USERNAME:           (lambda: self.username, {}),
 
-            XspressDetectorStr.CONFIG_DEBUG : (lambda: self.ctr_debug, partial(self._set, 'ctr_debug'), {}),
-            XspressDetectorStr.CONFIG_CTRL_ENDPOINT: (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
+            XspressDetectorStr.CONFIG_DEBUG :                     (lambda: self.ctr_debug, partial(self._set, 'ctr_debug'), {}),
+            XspressDetectorStr.CONFIG_CTRL_ENDPOINT:              (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
             XspressDetectorStr.CONFIG_XSP :
             {
-                XspressDetectorStr.CONFIG_XSP_NUM_CARDS : (lambda: self.num_cards, partial(self._set, 'num_cards'), {}),
-                XspressDetectorStr.CONFIG_XSP_NUM_TF : (lambda: self.num_tf, partial(self._set, 'num_tf'), {}),
-                XspressDetectorStr.CONFIG_XSP_BASE_IP : (lambda: self.base_ip, partial(self._set, 'base_ip'), {}),
-                XspressDetectorStr.CONFIG_XSP_MAX_CHANNELS : (lambda: self.max_channels, partial(self._set, 'max_channels'), {}),
-                XspressDetectorStr.CONFIG_XSP_MAX_SPECTRA : (lambda: self.max_spectra, partial(self._set, 'max_spectra'), {}),
-                XspressDetectorStr.CONFIG_XSP_DEBUG : (lambda: self.debug, partial(self._set, 'debug'), {}),
-                XspressDetectorStr.CONFIG_XSP_CONFIG_PATH : (lambda: self.settings_path, partial(self._set, "settings_path"), {}),
-                XspressDetectorStr.CONFIG_XSP_CONFIG_SAVE_PATH : (lambda: self.settings_save_path, partial(self._set, "settings_save_path"), {}),
-                XspressDetectorStr.CONFIG_XSP_USE_RESGRADES : (lambda: self.use_resgrade, partial(self._set, "use_resgrade"), {}),
-                XspressDetectorStr.CONFIG_XSP_RUN_FLAGS : (lambda: self.run_flags, partial(self._set, "run_flags"), {}),
-                XspressDetectorStr.CONFIG_XSP_DTC_ENERGY : (lambda: self.dtc_energy, partial(self._set, "dtc_energy"), {}),
-                XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (lambda: self.trigger_mode, partial(self._set, "trigger_mode"), {}),
-                XspressDetectorStr.CONFIG_XSP_INVERT_F0 : (lambda: self.invert_f0, partial(self._set, "invert_f0"), {}),
-                XspressDetectorStr.CONFIG_XSP_INVERT_VETO : (lambda: self.invert_veto, partial(self._set, "invert_veto"), {}),
-                XspressDetectorStr.CONFIG_XSP_DEBOUNCE : (lambda: self.debounce, partial(self._set, "debounce"), {}),
-                XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME : (lambda: self.exposure_time, partial(self._set, "exposure_time"), {}),
-                XspressDetectorStr.CONFIG_XSP_FRAMES : (lambda: self.frames, partial(self._set, "frames"), {}),
+                XspressDetectorStr.CONFIG_XSP_NUM_CARDS :         (lambda: self.num_cards, partial(self._set, 'num_cards'), {}),
+                XspressDetectorStr.CONFIG_XSP_NUM_TF :            (lambda: self.num_tf, partial(self._set, 'num_tf'), {}),
+                XspressDetectorStr.CONFIG_XSP_BASE_IP :           (lambda: self.base_ip, partial(self._set, 'base_ip'), {}),
+                XspressDetectorStr.CONFIG_XSP_MAX_CHANNELS :      (lambda: self.max_channels, partial(self._set, 'max_channels'), {}),
+                XspressDetectorStr.CONFIG_XSP_MAX_SPECTRA :       (lambda: self.max_spectra, partial(self._set, 'max_spectra'), {}),
+                XspressDetectorStr.CONFIG_XSP_DEBUG :             (lambda: self.debug, partial(self._set, 'debug'), {}),
+                XspressDetectorStr.CONFIG_XSP_CONFIG_PATH :       (lambda: self.settings_path, partial(self._set, "settings_path"), {}),
+                XspressDetectorStr.CONFIG_XSP_CONFIG_SAVE_PATH :  (lambda: self.settings_save_path, partial(self._set, "settings_save_path"), {}),
+                XspressDetectorStr.CONFIG_XSP_USE_RESGRADES :     (lambda: self.use_resgrade, partial(self._set, "use_resgrade"), {}),
+                XspressDetectorStr.CONFIG_XSP_RUN_FLAGS :         (lambda: self.run_flags, partial(self._set, "run_flags"), {}),
+                XspressDetectorStr.CONFIG_XSP_DTC_ENERGY :        (lambda: self.dtc_energy, partial(self._set, "dtc_energy"), {}),
+                XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE :      (lambda: self.trigger_mode, partial(self._set, "trigger_mode"), {}),
+                XspressDetectorStr.CONFIG_XSP_INVERT_F0 :         (lambda: self.invert_f0, partial(self._set, "invert_f0"), {}),
+                XspressDetectorStr.CONFIG_XSP_INVERT_VETO :       (lambda: self.invert_veto, partial(self._set, "invert_veto"), {}),
+                XspressDetectorStr.CONFIG_XSP_DEBOUNCE :          (lambda: self.debounce, partial(self._set, "debounce"), {}),
+                XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME :     (lambda: self.exposure_time, partial(self._set, "exposure_time"), {}),
+                XspressDetectorStr.CONFIG_XSP_FRAMES :            (lambda: self.frames, partial(self._set, "frames"), {}),
             }
         }
         self.parameter_tree = ParameterTree(tree)
@@ -277,6 +173,7 @@ class XspressDetector(object):
             {
                 XspressDetectorStr.CONFIG_XSP_BASE_IP : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_BASE_IP), {}),
                 XspressDetectorStr.CONFIG_XSP_CONFIG_PATH : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_CONFIG_PATH), {}),
+                XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE), {}),
             }
         }
         self.put_parameter_tree = ParameterTree(put_tree)
@@ -408,7 +305,7 @@ class XspressDetector(object):
         elif message_type == MessageType.CMD:
             params_group = "cmd"
         else:
-            raise XspressDetectorException(f"XspressDetector._build_config_message: {message_type} is not type MessageType")
+            raise XspressDetectorException(f"XspressDetector._build_message: {message_type} is not type MessageType")
         msg = IpcMessage("cmd", "configure")
         msg.set_param(params_group, config)
         return msg
