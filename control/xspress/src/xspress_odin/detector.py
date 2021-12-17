@@ -1,26 +1,58 @@
 import logging
-import tornado
 import getpass
 
 from enum import Enum
 from functools import partial
 from datetime import datetime
 
-from abc import ABC, abstractmethod
 from odin_data.ipc_client import IpcClient
 from odin_data.ipc_message import IpcMessage
-from zmq.eventloop.zmqstream import ZMQStream
-from zmq.utils.monitor import parse_monitor_message
-from zmq.utils.strtypes import unicode, cast_bytes
 from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
+from tornado.ioloop import PeriodicCallback
 
 from .client import XspressClient
-
+from .debug import debug_method
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
-UPDATE_PARAMS_PERIOD_MILLI_SECONDS = 5000//1
+UPDATE_PARAMS_PERIOD_SECONDS = 5
 QUEUE_SIZE_LIMIT = 10
+
+class AuotoPeriodicCallback(object):
+    """
+    Automatically start and stop the periodic callbacks based on the value of another callback (predicate).
+    In order to start/stop the main callback in time, the predicate will be checked at time/2.
+    """
+    def __init__(self, callback, predicate, time_seconds):
+        self.callback = callback
+        self.predicate = predicate
+        time = time_seconds*1000
+        self.callback_time = time
+        self.predicate_time = time/2.0
+        self.callback_sched = PeriodicCallback(self.callback, self.callback_time)
+        self.predicate_sched = PeriodicCallback(self._auto_callback, self.predicate_time)
+
+    def _auto_callback(self):
+        if self.callback_sched.is_running() and not self.predicate():
+            self.callback_sched.stop()
+        elif not self.callback_sched.is_running() and self.predicate():
+            self.callback_sched.start()
+        
+    def start(self):
+        self.predicate_sched.start()
+
+    def stop(self):
+        self.predicate_sched.stop()
+        self.callback_sched.stop()
+
+    def is_running(self):
+        return self.predicate_sched.is_running()
+
+    def set_time(self, time_seconds: float):
+        time = time_seconds*1000
+        self.callback_sched.callback_time = time
+        self.predicate_sched.callback_time = time/2.0
+
 
 class MessageType(Enum):
     CMD = 1
@@ -40,6 +72,9 @@ class XspressTriggerMode:
     TM_LVDS_BOTH           = 8
 
 class XspressDetectorStr:
+    CONFIG_ADAPTER               = "adapter"
+    CONFIG_ADAPTER_SCAN          = "scan"
+    CONFIG_ADAPTER_UPDATE        = "update"
     CONFIG_ADAPTER_START_TIME    = "start_time"
     CONFIG_ADAPTER_UP_TIME       = "up_time"
     CONFIG_ADAPTER_CONNECTED      = "connected"
@@ -97,11 +132,10 @@ class XspressDetector(object):
 
         self._sync_client = IpcClient(ip, port) # calls zmq_sock.connect() so might throw?
         self._async_client = XspressClient(ip, port, callback=self.on_recv_callback)
-        self._async_client.register_on_send_callback(self.on_send_callback)
         self.timeout = 1
         self.ctrl_enpoint_connected: bool = False
         self.xsp_connected: bool = False
-        self.sched = tornado.ioloop.PeriodicCallback(self.read_config, UPDATE_PARAMS_PERIOD_MILLI_SECONDS)
+        self.sched = AuotoPeriodicCallback(self.read_config, self._async_client.is_connected, UPDATE_PARAMS_PERIOD_SECONDS)
 
         # root level parameter tree members
         self.ctr_endpoint = ENDPOINT_TEMPLATE.format(ip, port)
@@ -136,13 +170,16 @@ class XspressDetector(object):
 
         tree = \
         {
-            XspressDetectorStr.CONFIG_ADAPTER_START_TIME:         (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
-            XspressDetectorStr.CONFIG_ADAPTER_UP_TIME:            (lambda: str(datetime.now() - self.start_time), {}),
-            XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:          (lambda: self._async_client.is_connected(), {}),
-            XspressDetectorStr.CONFIG_ADAPTER_USERNAME:           (lambda: self.username, {}),
-
             XspressDetectorStr.CONFIG_DEBUG :                     (lambda: self.ctr_debug, partial(self._set, 'ctr_debug'), {}),
             XspressDetectorStr.CONFIG_CTRL_ENDPOINT:              (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
+
+            XspressDetectorStr.CONFIG_ADAPTER : {
+                XspressDetectorStr.CONFIG_ADAPTER_START_TIME:     (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
+                XspressDetectorStr.CONFIG_ADAPTER_UP_TIME:        (lambda: str(datetime.now() - self.start_time), {}),
+                XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (lambda: self._async_client.is_connected(), {}),
+                XspressDetectorStr.CONFIG_ADAPTER_USERNAME:       (lambda: self.username, {}),
+            },
+
             XspressDetectorStr.CONFIG_XSP :
             {
                 XspressDetectorStr.CONFIG_XSP_NUM_CARDS :         (lambda: self.num_cards, partial(self._set, 'num_cards'), {}),
@@ -169,20 +206,56 @@ class XspressDetector(object):
         {
             XspressDetectorStr.CONFIG_DEBUG : (None, partial(self._put, MessageType.CONFIG_ROOT, XspressDetectorStr.CONFIG_DEBUG), {}),
             XspressDetectorStr.CONFIG_CTRL_ENDPOINT: (None, partial(self._put, MessageType.CONFIG_ROOT, XspressDetectorStr.CONFIG_CTRL_ENDPOINT), {}),
+            XspressDetectorStr.CONFIG_ADAPTER :
+            {
+                XspressDetectorStr.CONFIG_ADAPTER_UPDATE: (None, self.do_updates, {}),
+                XspressDetectorStr.CONFIG_ADAPTER_SCAN: (None, self.sched.set_time, {}),
+            },
             XspressDetectorStr.CONFIG_XSP :
             {
+                XspressDetectorStr.CONFIG_XSP_NUM_CARDS : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_NUM_CARDS), {}),
+                XspressDetectorStr.CONFIG_XSP_NUM_TF : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_NUM_TF), {}),
                 XspressDetectorStr.CONFIG_XSP_BASE_IP : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_BASE_IP), {}),
+                XspressDetectorStr.CONFIG_XSP_MAX_CHANNELS : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MAX_CHANNELS), {}),
+                XspressDetectorStr.CONFIG_XSP_MAX_SPECTRA : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MAX_SPECTRA), {}),
+                XspressDetectorStr.CONFIG_XSP_DEBUG : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_DEBUG), {}),
                 XspressDetectorStr.CONFIG_XSP_CONFIG_PATH : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_CONFIG_PATH), {}),
+                XspressDetectorStr.CONFIG_XSP_CONFIG_SAVE_PATH : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_CONFIG_SAVE_PATH), {}),
+                XspressDetectorStr.CONFIG_XSP_USE_RESGRADES : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_USE_RESGRADES), {}),
+                XspressDetectorStr.CONFIG_XSP_RUN_FLAGS : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_RUN_FLAGS), {}),
+                XspressDetectorStr.CONFIG_XSP_DTC_ENERGY : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_DTC_ENERGY), {}),
                 XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE), {}),
+                XspressDetectorStr.CONFIG_XSP_INVERT_F0 : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_INVERT_F0), {}),
+                XspressDetectorStr.CONFIG_XSP_INVERT_VETO : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_INVERT_VETO), {}),
+                XspressDetectorStr.CONFIG_XSP_DEBOUNCE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_DEBOUNCE), {}),
+                XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE), {}),
+                XspressDetectorStr.CONFIG_XSP_FRAMES : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_FRAMES), {}),
+            },
+            XspressDetectorStr.CONFIG_CMD :
+            {
+                XspressDetectorStr.CONFIG_CMD_CONNECT : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT)),
+                XspressDetectorStr.CONFIG_CMD_SAVE : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_SAVE)),
+                XspressDetectorStr.CONFIG_CMD_RESTORE : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_RESTORE)),
+                XspressDetectorStr.CONFIG_CMD_START : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START)),
+                XspressDetectorStr.CONFIG_CMD_STOP : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_STOP)),
+                XspressDetectorStr.CONFIG_CMD_TRIGGER : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_TRIGGER)),
             }
         }
         self.put_parameter_tree = ParameterTree(put_tree)
 
-
+    def do_updates(self, value: int):
+        if value:
+            self.sched.start()
+        else:
+            self.sched.stop()
+        
     def _set(self, attr_name, value):
         setattr(self, attr_name, value)
 
     def _put(self, message_type: MessageType, config_str: str,  value: any):
+        logging.debug(debug_method())
+        if not self._async_client.is_connected():
+            raise ConnectionError("Control server is not connected! Check if it is running and tcp endpoint is configured correctly")
         if message_type == MessageType.CONFIG_ROOT:
             msg = self._build_message_single(config_str, value)
         else:
@@ -205,20 +278,8 @@ class XspressDetector(object):
             logging.error(f"parameter_tree error: {e}")
             raise LookupError(e)
 
-    def _stop_periodic_callbacks_till_queue_is_cleared(self):
-        if self._async_client.get_queue_size() > QUEUE_SIZE_LIMIT:
-            if self.sched.is_running():
-                logging.error("Queue size exceeded maximmum limit of {}.\n\tCurrent queue size: {}".format(QUEUE_SIZE_LIMIT, self._async_client.get_queue_size()))
-                self.sched.stop()
-        else:
-            if not self.sched.is_running():
-                self.sched.start()
-
-    def on_send_callback(self, msg, status):
-        self._stop_periodic_callbacks_till_queue_is_cleared()
 
     def on_recv_callback(self, msg):
-        self._stop_periodic_callbacks_till_queue_is_cleared()
         BASE_PATH = ""
         data = _cast_str(msg[0])
         logging.debug(f"queue size = {self._async_client.get_queue_size()}")
@@ -238,7 +299,7 @@ class XspressDetector(object):
             try:
                 path = path.strip("/")
                 self.parameter_tree.set(path, params)
-                logging.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
+                # logging.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
             except ParameterTreeError:
                 logging.warning(f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree")
                 pass

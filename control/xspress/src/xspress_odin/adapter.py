@@ -11,6 +11,8 @@ from tornado.escape import json_decode
 from odin.adapters.adapter import ApiAdapter, ApiAdapterResponse, request_types, response_types
 from xspress_odin.detector import XspressDetector, XspressDetectorException
 
+from .debug import debug_method
+
 
 def require_valid_detector(func):
     """Decorator method for request handler methods to check that adapter has valid detector."""
@@ -101,15 +103,14 @@ class XspressAdapter(ApiAdapter):
         :param request: Tornado HTTP request object
         :return: ApiAdapterResponse object to be returned to the client
         """
-        logging.debug("%s", path)
-        logging.debug("%s", request.body)
+        logging.debug(debug_method())
         try:
             data = json_decode(request.body)
             response = self.detector.put(path, data)
             status_code = 200
         except ConnectionError as e:
             response = {'error': str(e)}
-            status_code = 400
+            status_code = 500
             logging.error(e)
         except (TypeError, ValueError) as e:
             response = {'error': 'Failed to decode PUT request body {}:\n {}'.format(data, e)}
