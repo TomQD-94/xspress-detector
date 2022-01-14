@@ -126,15 +126,14 @@ void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code)
   }
 }
 
-
-int LibXspressWrapper::configure(int num_cards,                 // Number of XSPRESS cards
-                                 int num_frames,                // Number of 4096 energy bin spectra timeframes
-                                 const std::string& ip_address, // Base IP address
-                                 int port,                      // Base port number override (-1 does not override)
-                                 int max_channels,              // Set the maximum number of channels
-                                 int debug,                     // Enable debug messages
-                                 int verbose                    // Enable verbose debug messages
-                                 )
+int LibXspressWrapper::configure_mca(int num_cards,                 // Number of XSPRESS cards
+                                     int num_frames,                // Number of 4096 energy bin spectra timeframes
+                                     const std::string& ip_address, // Base IP address
+                                     int port,                      // Base port number override (-1 does not override)
+                                     int max_channels,              // Set the maximum number of channels
+                                     int debug,                     // Enable debug messages
+                                     int verbose                    // Enable verbose debug messages
+                                     )
 {
   int status = XSP_STATUS_OK;
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_config");
@@ -155,6 +154,46 @@ int LibXspressWrapper::configure(int num_cards,                 // Number of XSP
   if (xsp_handle_ < 0){
     status = XSP_STATUS_ERROR;
     checkErrorCode("xsp3_config", xsp_handle_);
+  }
+  return status;
+}
+
+int LibXspressWrapper::configure_list(int num_cards,                 // Number of XSPRESS cards
+                                      int num_frames,                // Number of 4096 energy bin spectra timeframes
+                                      const std::string& ip_address, // Base IP address
+                                      int port,                      // Base port number override (-1 does not override)
+                                      int max_channels,              // Set the maximum number of channels
+                                      int debug                      // Enable debug messages
+                                      )
+{
+  int status = XSP_STATUS_OK;
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_config_init");
+
+  // Setup initialisation flags to allow alternate UDP RX sockets using the default ports
+  int do_init = Xsp3Init_Normal | Xsp3InitUDP_DisHistThreads;
+
+  // Call the more detailed config init function
+  xsp_handle_ = xsp3_config_init(
+    num_cards,                              // Number of XSPRESS cards
+    num_frames,                             // Number of 4096 energy bin spectra timeframes
+    const_cast<char *>(ip_address.c_str()), // Base IP address
+    port,                                   // Base port number override (-1 does not override)
+    NULL,                                   // Base MAC override (NULL does not override)
+    max_channels,                           // Set the maximum number of channels
+    1,                                      // Don't create scope data module
+    NULL,                                   // Override scope data module filename
+    debug,                                  // Enable debug messages
+    0,                                      // Card index
+    (Xsp3Init)do_init,                      // Initialisation flags
+    Xsp3mRd_Auto,                           // Xsp3mRd_Auto
+    XspressReal                             // XspressReal
+  );
+
+  // Check the returned handle.  
+  // If the handle is less than zero then set an error
+  if (xsp_handle_ < 0){
+    status = XSP_STATUS_ERROR;
+    checkErrorCode("xsp3_config_init", xsp_handle_);
   }
   return status;
 }

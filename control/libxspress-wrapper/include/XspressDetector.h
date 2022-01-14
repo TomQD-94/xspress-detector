@@ -24,6 +24,9 @@
 using namespace log4cxx;
 using namespace log4cxx::helpers;
 
+#define XSP_MODE_MCA "mca"
+#define XSP_MODE_LIST "list"
+
 namespace Xspress
 {
 
@@ -45,6 +48,8 @@ public:
   std::string getErrorString();
   void checkErrorCode(const std::string& prefix, int code);
   int connect();
+  int connect_mca_mode();
+  int connect_list_mode();
   int checkConnected();
   int setupChannels();
   int enableDAQ();
@@ -95,6 +100,8 @@ public:
   double getXspExposureTime();
   void setXspFrames(int frames);
   int getXspFrames();
+  void setXspMode(const std::string& mode);
+  std::string getXspMode();
   void setXspDAQEndpoints(std::vector<std::string> endpoints);
   std::vector<std::string> getXspDAQEndpoints();
   
@@ -155,6 +162,8 @@ private:
   double                        xsp_exposure_time_;
   /** Number of frames */
   int                           xsp_frames_;
+  /** Mode of operation */
+  std::string                   xsp_mode_;
   /** DAQ endpoints */
   std::vector<std::string>      xsp_daq_endpoints_;
   

@@ -38,6 +38,7 @@ const std::string XspressController::CONFIG_XSP_INVERT_VETO       = "invert_veto
 const std::string XspressController::CONFIG_XSP_DEBOUNCE          = "debounce";
 const std::string XspressController::CONFIG_XSP_EXPOSURE_TIME     = "exposure_time";
 const std::string XspressController::CONFIG_XSP_FRAMES            = "frames";
+const std::string XspressController::CONFIG_XSP_MODE              = "mode";
 
 const std::string XspressController::CONFIG_DAQ                   = "daq";
 const std::string XspressController::CONFIG_DAQ_ENABLED           = "enabled";
@@ -50,6 +51,10 @@ const std::string XspressController::CONFIG_CMD_RESTORE           = "restore";
 const std::string XspressController::CONFIG_CMD_START             = "start";
 const std::string XspressController::CONFIG_CMD_STOP              = "stop";
 const std::string XspressController::CONFIG_CMD_TRIGGER           = "trigger";
+
+const std::string XspressController::CONFIG_XSP_MODE_MCA          = XSP_MODE_MCA;
+const std::string XspressController::CONFIG_XSP_MODE_LIST         = XSP_MODE_LIST;
+
 
 /** Construct a new XspressController class.
  *
@@ -391,6 +396,19 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     xsp_.setXspFrames(frames);
   }
 
+  // Check for mode parameter
+  if (config.has_param(XspressController::CONFIG_XSP_MODE)) {
+    std::string mode = config.get_param<std::string>(XspressController::CONFIG_XSP_MODE);
+    if (mode != XSP_MODE_MCA && mode != XSP_MODE_LIST){
+      LOG4CXX_ERROR(logger_, "Invalid mode requested: " << mode);
+      reply.set_msg_type(OdinData::IpcMessage::MsgTypeNack);
+      reply.set_param("error", "Invalid mode requested: " + mode);
+    } else {
+      LOG4CXX_DEBUG_LEVEL(1, logger_, "mode set to " << mode);
+      xsp_.setXspMode(mode);
+    }
+  }
+
 }
 
 /**
@@ -535,6 +553,11 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
                   XspressController::CONFIG_XSP_EXPOSURE_TIME, xsp_.getXspExposureTime());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_FRAMES, xsp_.getXspFrames());
+  std::vector<std::string> eps = xsp_.getXspDAQEndpoints();
+  for (int index = 0; index < eps.size(); index++){
+    reply.set_param(XspressController::CONFIG_DAQ + "/" +
+                    XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS + "[]", eps[index]);
+  }
 
 }
 

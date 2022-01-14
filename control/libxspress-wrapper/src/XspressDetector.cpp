@@ -42,7 +42,8 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_invert_veto_(0),
     xsp_debounce_(0),
     xsp_exposure_time_(0.0),
-    xsp_frames_(0)
+    xsp_frames_(0),
+    xsp_mode_(XSP_MODE_MCA)
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing XspressDetector");
@@ -70,6 +71,26 @@ std::string XspressDetector::getErrorString()
 int XspressDetector::connect()
 {
   int status = XSP_STATUS_OK;
+  if (!connected_){
+    // Check the mode and then connect accordingly
+    if (xsp_mode_ == XSP_MODE_MCA){
+      status = connect_mca_mode();
+    } else if (xsp_mode_ == XSP_MODE_LIST){
+      status = connect_list_mode();
+    } else {
+      setErrorString("Invalid connection mode, could not connect: " + xsp_mode_);
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    setErrorString("Xspress already connected, disconnect first");
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int XspressDetector::connect_mca_mode()
+{
+  int status = XSP_STATUS_OK;
   // Reset connected status
   connected_ = false;
 
@@ -84,7 +105,7 @@ int XspressDetector::connect()
 
     } else {
       // Call the detector configure method
-      status = detector_.configure(
+      status = detector_.configure_mca(
         xsp_num_cards_,                            // Number of XSPRESS cards
         xsp_num_tf_,                               // Number of 4096 energy bin spectra timeframes
         const_cast<char *>(xsp_base_IP_.c_str()),  // Base IP address
@@ -99,6 +120,27 @@ int XspressDetector::connect()
       LOG4CXX_INFO(logger_, "Connected to Xspress");
       connected_ = true;
     }
+  }
+  return status;
+}
+
+int XspressDetector::connect_list_mode()
+{
+  int status = XSP_STATUS_OK;
+
+  // Call the detector configure method
+  status = detector_.configure_list(
+    xsp_num_cards_,                            // Number of XSPRESS cards
+    xsp_num_tf_,                               // Number of 4096 energy bin spectra timeframes
+    const_cast<char *>(xsp_base_IP_.c_str()),  // Base IP address
+    -1,                                        // Base port number override (-1 does not override)
+    xsp_max_channels_,                         // Set the maximum number of channels
+    xsp_debug_                                 // Enable debug messages
+  );
+  if (status == XSP_STATUS_OK){
+    // We have a valid handle to set the connected status
+    LOG4CXX_INFO(logger_, "Connected to Xspress");
+    connected_ = true;
   }
   return status;
 }
@@ -380,12 +422,18 @@ int XspressDetector::startAcquisition()
     }
   }
 
-  if (status == XSP_STATUS_OK){
-    // If the DAQ object exists prime the DAQ threads with the expected number of frames
-    if (daq_){
-      daq_->startAcquisition(xsp_frames_);
+  if (xsp_mode_ == XSP_MODE_MCA){
+    if (status == XSP_STATUS_OK){
+      // If the DAQ object exists prime the DAQ threads with the expected number of frames
+      if (daq_){
+        daq_->startAcquisition(xsp_frames_);
+      }
     }
+  } else {
+    LOG4CXX_INFO(logger_, "Arming for list mode, disabling control DAQ");
+  }
 
+  if (status == XSP_STATUS_OK){
     LOG4CXX_INFO(logger_, "Arm complete, detector ready for acquisition");
     acquiring_ = true;
   }
@@ -622,6 +670,16 @@ void XspressDetector::setXspFrames(int frames)
 int XspressDetector::getXspFrames()
 {
   return xsp_frames_;
+}
+
+void XspressDetector::setXspMode(const std::string& mode)
+{
+  xsp_mode_ = mode;
+}
+
+std::string XspressDetector::getXspMode()
+{
+  return xsp_mode_;
 }
 
 void XspressDetector::setXspDAQEndpoints(std::vector<std::string> endpoints)

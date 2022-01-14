@@ -84,6 +84,7 @@ private:
   static const std::string CONFIG_XSP_DEBOUNCE;
   static const std::string CONFIG_XSP_EXPOSURE_TIME;
   static const std::string CONFIG_XSP_FRAMES;
+  static const std::string CONFIG_XSP_MODE;
 
   /** Configuration constants for DAQ class **/
   static const std::string CONFIG_DAQ;
@@ -98,6 +99,9 @@ private:
   static const std::string CONFIG_CMD_START;
   static const std::string CONFIG_CMD_STOP;
   static const std::string CONFIG_CMD_TRIGGER;
+
+  static const std::string CONFIG_XSP_MODE_MCA;
+  static const std::string CONFIG_XSP_MODE_LIST;
 
   void setupControlInterface(const std::string& ctrlEndpointString);
   void closeControlInterface();
