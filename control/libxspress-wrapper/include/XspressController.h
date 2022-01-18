@@ -94,6 +94,7 @@ private:
   /** Configuration constants for commands **/
   static const std::string CONFIG_CMD;
   static const std::string CONFIG_CMD_CONNECT;
+  static const std::string CONFIG_CMD_DISCONNECT;
   static const std::string CONFIG_CMD_SAVE;
   static const std::string CONFIG_CMD_RESTORE;
   static const std::string CONFIG_CMD_START;

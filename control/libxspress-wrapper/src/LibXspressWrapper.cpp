@@ -57,6 +57,20 @@ LibXspressWrapper::~LibXspressWrapper()
 
 }
 
+// TODO: Feature set required
+
+std::string LibXspressWrapper::getVersionString()
+{
+  int version_no = xsp3_get_revision(xsp_handle_);
+  std::stringstream version_ss;
+  version_ss << XSP3_REVISION_GET_DETECTOR(version_no)
+             << "."
+             << XSP3_REVISION_GET_MAJOR(version_no)
+             << "." 
+             << XSP3_REVISION_GET_MINOR(version_no);
+  return version_ss.str();
+}
+
 void LibXspressWrapper::setErrorString(const std::string& error)
 {
   LOG4CXX_ERROR(logger_, error);
@@ -194,6 +208,21 @@ int LibXspressWrapper::configure_list(int num_cards,                 // Number o
   if (xsp_handle_ < 0){
     status = XSP_STATUS_ERROR;
     checkErrorCode("xsp3_config_init", xsp_handle_);
+  }
+  return status;
+}
+
+int LibXspressWrapper::close_connection()
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = 0;
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_close");
+
+  xsp_status = xsp3_close(xsp_handle_);
+
+  if (xsp_status != XSP3_OK) {
+    checkErrorCode("xsp3_close", xsp_status);
+    status = XSP_STATUS_ERROR;
   }
   return status;
 }

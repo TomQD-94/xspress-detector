@@ -44,6 +44,7 @@ class XspressDetector
 public:
   XspressDetector(bool simulation=false);
   virtual ~XspressDetector();
+  std::string getVersionString();
   void setErrorString(const std::string& error);
   std::string getErrorString();
   void checkErrorCode(const std::string& prefix, int code);
@@ -51,6 +52,7 @@ public:
   int connect_mca_mode();
   int connect_list_mode();
   int checkConnected();
+  int disconnect();
   int setupChannels();
   int enableDAQ();
   int checkSaveDir(const std::string& dir_name);

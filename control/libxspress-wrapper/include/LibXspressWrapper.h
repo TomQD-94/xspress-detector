@@ -72,6 +72,7 @@ class LibXspressWrapper
 public:
   LibXspressWrapper();
   virtual ~LibXspressWrapper();
+  std::string getVersionString();
   void setErrorString(const std::string& error);
   std::string getErrorString();
   void checkErrorCode(const std::string& prefix, int code);
@@ -92,6 +93,8 @@ public:
                      int max_channels,              // Set the maximum number of channels
                      int debug                      // Enable debug messages
                      );
+
+  int close_connection();
 
   int save_settings(const std::string& save_path);
   int restore_settings(const std::string& restore_path);

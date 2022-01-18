@@ -46,6 +46,7 @@ const std::string XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS     = "endpoints";
 
 const std::string XspressController::CONFIG_CMD                   = "cmd";
 const std::string XspressController::CONFIG_CMD_CONNECT           = "connect";
+const std::string XspressController::CONFIG_CMD_DISCONNECT        = "disconnect";
 const std::string XspressController::CONFIG_CMD_SAVE              = "save";
 const std::string XspressController::CONFIG_CMD_RESTORE           = "restore";
 const std::string XspressController::CONFIG_CMD_START             = "start";
@@ -460,9 +461,22 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
     } else {
+      // Log the Xspress version
+      LOG4CXX_INFO(logger_, "Connected to Xspress version: " << xsp_.getVersionString());
       // Attempt to restore the settings
       status = xsp_.restoreSettings();
     }
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
+
+  // Check for a disconnect command
+  if (config.has_param(XspressController::CONFIG_CMD_DISCONNECT)){
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "disconnect command executing");
+    // Attempt connection to the hardware
+    int status = xsp_.disconnect();
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());

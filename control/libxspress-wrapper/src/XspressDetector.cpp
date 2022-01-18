@@ -68,6 +68,15 @@ std::string XspressDetector::getErrorString()
   return error_string_;
 }
 
+std::string XspressDetector::getVersionString()
+{
+  std::string version = "Not connected";
+  if (connected_){
+    version = detector_.getVersionString();
+  }
+  return version;
+}
+
 int XspressDetector::connect()
 {
   int status = XSP_STATUS_OK;
@@ -148,6 +157,26 @@ int XspressDetector::connect_list_mode()
 int XspressDetector::checkConnected()
 {
   return connected_;
+}
+
+int XspressDetector::disconnect()
+{
+  int status = XSP_STATUS_OK;
+
+  if (checkConnected()){
+    status = detector_.close_connection();
+    if (status == XSP_STATUS_OK){
+      // We have disconnected from the detector
+      LOG4CXX_INFO(logger_, "Disconnected from Xspress");
+      connected_ = false;
+    }
+
+    // Shutdown the DAQ object and threads if required
+    if (daq_){
+      daq_.reset();
+    }
+  }
+  return status;
 }
 
 int XspressDetector::setupChannels()
