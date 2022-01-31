@@ -14,11 +14,10 @@
 namespace Xspress
 {
 
-const std::string XspressController::CONFIG_SHUTDOWN              = "shutdown";
-
-const std::string XspressController::CONFIG_DEBUG                 = "debug_level";
-
-const std::string XspressController::CONFIG_CTRL_ENDPOINT         = "ctrl_endpoint";
+const std::string XspressController::CONFIG_APP                   = "app";
+const std::string XspressController::CONFIG_APP_SHUTDOWN          = "shutdown";
+const std::string XspressController::CONFIG_APP_DEBUG             = "debug_level";
+const std::string XspressController::CONFIG_APP_CTRL_ENDPOINT     = "ctrl_endpoint";
 
 const std::string XspressController::CONFIG_XSP                   = "xsp";
 const std::string XspressController::CONFIG_XSP_NUM_CARDS         = "num_cards";
@@ -216,20 +215,14 @@ void XspressController::provideVersion(OdinData::IpcMessage& reply)
 }
 
 /**
- * Set configuration options for the FrameProcessorController.
+ * Set configuration options for the Control Wrapper application.
  *
- * Sets up the overall FileWriter application according to the
+ * Sets up the overall control application according to the
  * configuration IpcMessage objects that are received. The objects
  * are searched for:
- * CONFIG_SHUTDOWN - Shuts down the application
- * CONFIG_STATUS - Retrieves status for all plugins and replies
- * CONFIG_CTRL_ENDPOINT - Calls the method setupControlInterface
- * CONFIG_PLUGIN - Calls the method configurePlugin
- * CONFIG_FR_SETUP - Calls the method setupFrameReceiverInterface
- *
- * The method also searches for configuration objects that have the
- * same index as loaded plugins. If any of these are found the they
- * are passed down to the plugin for execution.
+ * CONFIG_APP - Sets up the control application
+ * CONFIG_XSP - Sets up the Xspress hardware
+ * CONFIG_DAQ - Sets up the DAQ for MCA mode
  *
  * \param[in] config - IpcMessage containing configuration data.
  * \param[out] reply - Response IpcMessage.
@@ -238,16 +231,10 @@ void XspressController::configure(OdinData::IpcMessage& config, OdinData::IpcMes
 {
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Configuration submitted: " << config.encode());
 
-  // Check for a debug level change
-  if (config.has_param(XspressController::CONFIG_DEBUG)) {
-    unsigned int debug = config.get_param<unsigned int>(XspressController::CONFIG_DEBUG);
-    LOG4CXX_DEBUG_LEVEL(1, logger_, "Debug level set to  " << debug);
-    set_debug_level(debug);
-  }
-
-  if (config.has_param(XspressController::CONFIG_CTRL_ENDPOINT)) {
-    std::string endpoint = config.get_param<std::string>(XspressController::CONFIG_CTRL_ENDPOINT);
-    this->setupControlInterface(endpoint);
+  // Check to see if we are configuring this control application
+  if (config.has_param(XspressController::CONFIG_APP)) {
+    OdinData::IpcMessage appConfig(config.get_param<const rapidjson::Value&>(XspressController::CONFIG_APP));
+    this->configureApp(appConfig, reply);
   }
 
   // Check to see if we are configuring the Xspress hardware
@@ -268,6 +255,28 @@ void XspressController::configure(OdinData::IpcMessage& config, OdinData::IpcMes
     this->configureCommand(cmdConfig, reply);
   }
 
+}
+
+/**
+ * Set configuration options for this control application.
+ *
+ * \param[in] config - IpcMessage containing configuration data.
+ * \param[out] reply - Response IpcMessage.
+ */
+void XspressController::configureApp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
+{
+  // Check for a debug level change
+  if (config.has_param(XspressController::CONFIG_APP_DEBUG)) {
+    unsigned int debug = config.get_param<unsigned int>(XspressController::CONFIG_APP_DEBUG);
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "Debug level set to  " << debug);
+    set_debug_level(debug);
+  }
+
+  if (config.has_param(XspressController::CONFIG_APP_CTRL_ENDPOINT)) {
+    std::string endpoint = config.get_param<std::string>(XspressController::CONFIG_APP_CTRL_ENDPOINT);
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "Setting control end point to  " << endpoint);
+    this->setupControlInterface(endpoint);
+  }
 }
 
 /**
@@ -530,8 +539,10 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
   LOG4CXX_DEBUG_LEVEL(3, logger_, "Request for configuration made");
 
   // Add local configuration parameter values to the reply
-  reply.set_param(XspressController::CONFIG_DEBUG, debug_level);
-  reply.set_param(XspressController::CONFIG_CTRL_ENDPOINT, ctrlChannelEndpoint_);
+  reply.set_param(XspressController::CONFIG_APP + "/" +
+                  XspressController::CONFIG_APP_DEBUG, debug_level);
+  reply.set_param(XspressController::CONFIG_APP + "/" +
+                  XspressController::CONFIG_APP_CTRL_ENDPOINT, ctrlChannelEndpoint_);
   // Add Xspress configuration parameter values to the reply
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_NUM_CARDS, xsp_.getXspNumCards());

@@ -46,6 +46,7 @@ public:
   void provideStatus(OdinData::IpcMessage& reply);
   void provideVersion(OdinData::IpcMessage& reply);
   void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
+  void configureApp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void configureXsp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void configureDAQ(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void configureCommand(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
@@ -56,14 +57,14 @@ public:
   void shutdown();
 
 private:
+  /** Configuration constants for application control **/
+  static const std::string CONFIG_APP;
   /** Configuration constant to shutdown the xspress controller **/
-  static const std::string CONFIG_SHUTDOWN;
-
+  static const std::string CONFIG_APP_SHUTDOWN;
   /** Configuration constant to set the debug level of the xspress controller **/
-  static const std::string CONFIG_DEBUG;
-
+  static const std::string CONFIG_APP_DEBUG;
   /** Configuration constant for control socket endpoint **/
-  static const std::string CONFIG_CTRL_ENDPOINT;
+  static const std::string CONFIG_APP_CTRL_ENDPOINT;
 
   /** Configuration constants for parameters **/
   static const std::string CONFIG_XSP;
