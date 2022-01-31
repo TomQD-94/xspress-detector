@@ -83,6 +83,11 @@ class XspressAdapter(ApiAdapter):
         logging.debug(f"XspressAdapter.get called with path: {path}")
         try:
             response = self.detector.get(path)
+            # transform singel value jsons form {"param_name": value} to {"value": value} to work with the ADOdin client
+            first_value = next(iter(response.values()))
+            if len(response) == 1 and not isinstance(first_value, dict):
+                response = {"value": first_value}
+
             status_code = 200
         except LookupError as e:
             response = {'invalid path': str(e)}
