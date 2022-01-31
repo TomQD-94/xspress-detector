@@ -37,7 +37,7 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_dtc_params_updated_(false),
     xsp_dtc_energy_(0.0),
     xsp_clock_period_(0),
-    xsp_trigger_mode_(""),
+    xsp_trigger_mode_(TM_SOFTWARE),
     xsp_invert_f0_(0),
     xsp_invert_veto_(0),
     xsp_debounce_(0),
@@ -442,7 +442,7 @@ int XspressDetector::startAcquisition()
   }
 
   if (status == XSP_STATUS_OK){
-    if (xsp_trigger_mode_ == TM_SOFTWARE_STR){
+    if (xsp_trigger_mode_ == TM_SOFTWARE){
       // Arm for soft trigger
       status = detector_.histogram_arm(0);
     } else {
@@ -482,7 +482,7 @@ int XspressDetector::sendSoftwareTrigger()
 {
   int status = XSP_STATUS_OK;
   if (acquiring_){
-    if (xsp_trigger_mode_ == TM_SOFTWARE_STR){
+    if (xsp_trigger_mode_ == TM_SOFTWARE){
       status = detector_.histogram_continue(0);
       status |= detector_.histogram_pause(0);
     } else {
@@ -641,12 +641,12 @@ double XspressDetector::getXspDTCEnergy()
   return xsp_dtc_energy_;
 }
 
-void XspressDetector::setXspTriggerMode(const std::string& mode)
+void XspressDetector::setXspTriggerMode(int mode)
 {
   xsp_trigger_mode_ = mode;
 }
 
-std::string XspressDetector::getXspTriggerMode()
+int XspressDetector::getXspTriggerMode()
 {
   return xsp_trigger_mode_;
 }

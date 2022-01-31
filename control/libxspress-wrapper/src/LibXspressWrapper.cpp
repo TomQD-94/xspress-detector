@@ -753,7 +753,7 @@ int LibXspressWrapper::mapTimeFrameSource(Xsp3Timing *api_mode,
 int LibXspressWrapper::setTriggerMode(int frames,
                                       double exposure_time,
                                       double clock_period,
-                                      const std::string& trigger_mode,
+                                      int trigger_mode,
                                       int debounce,
                                       int invert_f0,
                                       int invert_veto)
@@ -762,11 +762,10 @@ int LibXspressWrapper::setTriggerMode(int frames,
   Xsp3Timing xsp_trigger_mode = {0};
   int itfg_trig_mode;
   int xsp_status = XSP3_OK;
-  int tm = string_trigger_mode_to_int(trigger_mode);
 
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_itfg_setup and xsp3_set_timing");  
 
-  status = mapTimeFrameSource(&xsp_trigger_mode, &itfg_trig_mode, tm, debounce, invert_f0, invert_veto);
+  status = mapTimeFrameSource(&xsp_trigger_mode, &itfg_trig_mode, trigger_mode, debounce, invert_f0, invert_veto);
   if (status == XSP_STATUS_OK){
     if (xsp_trigger_mode.t_src == XSP3_GTIMA_SRC_INTERNAL) {
       xsp_status = xsp3_itfg_setup(xsp_handle_, 

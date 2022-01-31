@@ -134,7 +134,7 @@ public:
   int setTriggerMode(int frames,
                      double exposure_time,
                      double clock_period,
-                     const std::string& trigger_mode,
+                     int trigger_mode,
                      int debounce,
                      int invert_f0,
                      int invert_veto);

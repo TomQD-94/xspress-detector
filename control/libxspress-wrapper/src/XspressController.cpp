@@ -366,7 +366,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
 
   // Check for trigger mode parameter
   if (config.has_param(XspressController::CONFIG_XSP_TRIGGER_MODE)) {
-    std::string trigger_mode = config.get_param<std::string>(XspressController::CONFIG_XSP_TRIGGER_MODE);
+    int trigger_mode = config.get_param<int>(XspressController::CONFIG_XSP_TRIGGER_MODE);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "trigger_mode set to  " << trigger_mode);
     xsp_.setXspTriggerMode(trigger_mode);
   }

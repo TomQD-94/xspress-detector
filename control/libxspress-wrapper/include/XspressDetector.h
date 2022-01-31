@@ -90,8 +90,8 @@ public:
   int getXspRunFlags();
   void setXspDTCEnergy(double energy);
   double getXspDTCEnergy();
-  void setXspTriggerMode(const std::string& mode);
-  std::string getXspTriggerMode();
+  void setXspTriggerMode(int mode);
+  int getXspTriggerMode();
   void setXspInvertF0(int invert_f0);
   int getXspInvertF0();
   void setXspInvertVeto(int invert_veto);
@@ -153,7 +153,7 @@ private:
   /** Clock period */
   double                        xsp_clock_period_;
   /** Trigger mode */
-  std::string                   xsp_trigger_mode_;
+  int                           xsp_trigger_mode_;
   /** Invert f0 */
   int                           xsp_invert_f0_;
   /** Invert veto */
