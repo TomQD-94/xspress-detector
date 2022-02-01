@@ -19,7 +19,7 @@ const std::string XspressController::CONFIG_APP_SHUTDOWN          = "shutdown";
 const std::string XspressController::CONFIG_APP_DEBUG             = "debug_level";
 const std::string XspressController::CONFIG_APP_CTRL_ENDPOINT     = "ctrl_endpoint";
 
-const std::string XspressController::CONFIG_XSP                   = "xsp";
+const std::string XspressController::CONFIG_XSP                   = "config";
 const std::string XspressController::CONFIG_XSP_NUM_CARDS         = "num_cards";
 const std::string XspressController::CONFIG_XSP_NUM_TF            = "num_tf";
 const std::string XspressController::CONFIG_XSP_BASE_IP           = "base_ip";
@@ -36,7 +36,7 @@ const std::string XspressController::CONFIG_XSP_INVERT_F0         = "invert_f0";
 const std::string XspressController::CONFIG_XSP_INVERT_VETO       = "invert_veto";
 const std::string XspressController::CONFIG_XSP_DEBOUNCE          = "debounce";
 const std::string XspressController::CONFIG_XSP_EXPOSURE_TIME     = "exposure_time";
-const std::string XspressController::CONFIG_XSP_FRAMES            = "frames";
+const std::string XspressController::CONFIG_XSP_FRAMES            = "num_images";
 const std::string XspressController::CONFIG_XSP_MODE              = "mode";
 
 const std::string XspressController::CONFIG_DAQ                   = "daq";
