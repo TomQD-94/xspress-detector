@@ -57,6 +57,20 @@ LibXspressWrapper::~LibXspressWrapper()
 
 }
 
+// TODO: Feature set required
+
+std::string LibXspressWrapper::getVersionString()
+{
+  int version_no = xsp3_get_revision(xsp_handle_);
+  std::stringstream version_ss;
+  version_ss << XSP3_REVISION_GET_DETECTOR(version_no)
+             << "."
+             << XSP3_REVISION_GET_MAJOR(version_no)
+             << "." 
+             << XSP3_REVISION_GET_MINOR(version_no);
+  return version_ss.str();
+}
+
 void LibXspressWrapper::setErrorString(const std::string& error)
 {
   LOG4CXX_ERROR(logger_, error);
@@ -126,15 +140,14 @@ void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code)
   }
 }
 
-
-int LibXspressWrapper::configure(int num_cards,                 // Number of XSPRESS cards
-                                 int num_frames,                // Number of 4096 energy bin spectra timeframes
-                                 const std::string& ip_address, // Base IP address
-                                 int port,                      // Base port number override (-1 does not override)
-                                 int max_channels,              // Set the maximum number of channels
-                                 int debug,                     // Enable debug messages
-                                 int verbose                    // Enable verbose debug messages
-                                 )
+int LibXspressWrapper::configure_mca(int num_cards,                 // Number of XSPRESS cards
+                                     int num_frames,                // Number of 4096 energy bin spectra timeframes
+                                     const std::string& ip_address, // Base IP address
+                                     int port,                      // Base port number override (-1 does not override)
+                                     int max_channels,              // Set the maximum number of channels
+                                     int debug,                     // Enable debug messages
+                                     int verbose                    // Enable verbose debug messages
+                                     )
 {
   int status = XSP_STATUS_OK;
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_config");
@@ -155,6 +168,61 @@ int LibXspressWrapper::configure(int num_cards,                 // Number of XSP
   if (xsp_handle_ < 0){
     status = XSP_STATUS_ERROR;
     checkErrorCode("xsp3_config", xsp_handle_);
+  }
+  return status;
+}
+
+int LibXspressWrapper::configure_list(int num_cards,                 // Number of XSPRESS cards
+                                      int num_frames,                // Number of 4096 energy bin spectra timeframes
+                                      const std::string& ip_address, // Base IP address
+                                      int port,                      // Base port number override (-1 does not override)
+                                      int max_channels,              // Set the maximum number of channels
+                                      int debug                      // Enable debug messages
+                                      )
+{
+  int status = XSP_STATUS_OK;
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_config_init");
+
+  // Setup initialisation flags to allow alternate UDP RX sockets using the default ports
+  int do_init = Xsp3Init_Normal | Xsp3InitUDP_DisHistThreads;
+
+  // Call the more detailed config init function
+  xsp_handle_ = xsp3_config_init(
+    num_cards,                              // Number of XSPRESS cards
+    num_frames,                             // Number of 4096 energy bin spectra timeframes
+    const_cast<char *>(ip_address.c_str()), // Base IP address
+    port,                                   // Base port number override (-1 does not override)
+    NULL,                                   // Base MAC override (NULL does not override)
+    max_channels,                           // Set the maximum number of channels
+    1,                                      // Don't create scope data module
+    NULL,                                   // Override scope data module filename
+    debug,                                  // Enable debug messages
+    0,                                      // Card index
+    (Xsp3Init)do_init,                      // Initialisation flags
+    Xsp3mRd_Auto,                           // Xsp3mRd_Auto
+    XspressReal                             // XspressReal
+  );
+
+  // Check the returned handle.  
+  // If the handle is less than zero then set an error
+  if (xsp_handle_ < 0){
+    status = XSP_STATUS_ERROR;
+    checkErrorCode("xsp3_config_init", xsp_handle_);
+  }
+  return status;
+}
+
+int LibXspressWrapper::close_connection()
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = 0;
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_close");
+
+  xsp_status = xsp3_close(xsp_handle_);
+
+  if (xsp_status != XSP3_OK) {
+    checkErrorCode("xsp3_close", xsp_status);
+    status = XSP_STATUS_ERROR;
   }
   return status;
 }
@@ -685,7 +753,7 @@ int LibXspressWrapper::mapTimeFrameSource(Xsp3Timing *api_mode,
 int LibXspressWrapper::setTriggerMode(int frames,
                                       double exposure_time,
                                       double clock_period,
-                                      const std::string& trigger_mode,
+                                      int trigger_mode,
                                       int debounce,
                                       int invert_f0,
                                       int invert_veto)
@@ -694,11 +762,10 @@ int LibXspressWrapper::setTriggerMode(int frames,
   Xsp3Timing xsp_trigger_mode = {0};
   int itfg_trig_mode;
   int xsp_status = XSP3_OK;
-  int tm = string_trigger_mode_to_int(trigger_mode);
 
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_itfg_setup and xsp3_set_timing");  
 
-  status = mapTimeFrameSource(&xsp_trigger_mode, &itfg_trig_mode, tm, debounce, invert_f0, invert_veto);
+  status = mapTimeFrameSource(&xsp_trigger_mode, &itfg_trig_mode, trigger_mode, debounce, invert_f0, invert_veto);
   if (status == XSP_STATUS_OK){
     if (xsp_trigger_mode.t_src == XSP3_GTIMA_SRC_INTERNAL) {
       xsp_status = xsp3_itfg_setup(xsp_handle_, 

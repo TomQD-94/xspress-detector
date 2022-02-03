@@ -30,6 +30,7 @@ using namespace FrameProcessor;
 #define DAQ_TASK_TYPE_START    0
 #define DAQ_TASK_TYPE_READ     1
 #define DAQ_TASK_TYPE_COMPLETE 2
+#define DAQ_TASK_TYPE_SHUTDOWN 3
 
 namespace Xspress
 {

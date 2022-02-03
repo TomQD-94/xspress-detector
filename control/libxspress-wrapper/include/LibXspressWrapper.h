@@ -72,18 +72,29 @@ class LibXspressWrapper
 public:
   LibXspressWrapper();
   virtual ~LibXspressWrapper();
+  std::string getVersionString();
   void setErrorString(const std::string& error);
   std::string getErrorString();
   void checkErrorCode(const std::string& prefix, int code);
 
-  int configure(int num_cards,                 // Number of XSPRESS cards
-                int num_frames,                // Number of 4096 energy bin spectra timeframes
-                const std::string& ip_address, // Base IP address
-                int port,                      // Base port number override (-1 does not override)
-                int max_channels,              // Set the maximum number of channels
-                int debug,                     // Enable debug messages
-                int verbose                    // Enable verbose debug messages
-                );
+  int configure_mca(int num_cards,                 // Number of XSPRESS cards
+                    int num_frames,                // Number of 4096 energy bin spectra timeframes
+                    const std::string& ip_address, // Base IP address
+                    int port,                      // Base port number override (-1 does not override)
+                    int max_channels,              // Set the maximum number of channels
+                    int debug,                     // Enable debug messages
+                    int verbose                    // Enable verbose debug messages
+                    );
+
+  int configure_list(int num_cards,                 // Number of XSPRESS cards
+                     int num_frames,                // Number of 4096 energy bin spectra timeframes
+                     const std::string& ip_address, // Base IP address
+                     int port,                      // Base port number override (-1 does not override)
+                     int max_channels,              // Set the maximum number of channels
+                     int debug                      // Enable debug messages
+                     );
+
+  int close_connection();
 
   int save_settings(const std::string& save_path);
   int restore_settings(const std::string& restore_path);
@@ -123,7 +134,7 @@ public:
   int setTriggerMode(int frames,
                      double exposure_time,
                      double clock_period,
-                     const std::string& trigger_mode,
+                     int trigger_mode,
                      int debounce,
                      int invert_f0,
                      int invert_veto);

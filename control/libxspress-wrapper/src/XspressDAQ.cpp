@@ -81,7 +81,16 @@ XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr,
  */
 XspressDAQ::~XspressDAQ()
 {
-
+  // Shutdown the threads
+  ctrl_queue_->add(create_task(DAQ_TASK_TYPE_SHUTDOWN), true);
+  // Wait for all threads to complete shutdown
+  std::vector<boost::thread *>::iterator iter;
+  for (iter = work_threads_.begin(); iter != work_threads_.end(); ++iter){
+    (*iter)->join();
+  }
+  // Destroy the ZMQ context
+  context_->close();
+  delete(context_);
 }
 
 void XspressDAQ::set_num_aux_data(uint32_t num_aux_data)
@@ -175,7 +184,17 @@ void XspressDAQ::controlTask()
       }
       LOG4CXX_INFO(logger_, "DAQ thread completed, read " << frames_read << " frames");
     }
+    if (task->type_ == DAQ_TASK_TYPE_SHUTDOWN){
+      // Signal shutdown to all of the worker threads
+      std::vector<boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > >::iterator iter;
+      for (iter = work_queues_.begin(); iter != work_queues_.end(); ++iter){
+        (*iter)->add(create_task(DAQ_TASK_TYPE_SHUTDOWN));
+      }
+      // Now set the executing boolean to false
+      executing = false;
+    }
   }
+  LOG4CXX_INFO(logger_, "Stopping control task with ID [" << boost::this_thread::get_id() << "]");
 }
 
 void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > queue,
@@ -247,12 +266,6 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
           base_ptr += (header_size + scalar_size + dtc_size + inp_est_size);
           uint32_t *d_ptr = (uint32_t *)base_ptr;
 
-//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => frame_ptr: [" << frame_ptr << "]");
-//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => h_ptr: [" << h_ptr << "]");
-//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => s_ptr: [" << s_ptr << "]");
-//        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => d_ptr: [" << d_ptr << "]");
-
-
           // Fill in the header data items
           h_ptr[0] = frames_read + current_frame;
           h_ptr[1] = num_spectra_;
@@ -319,7 +332,17 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
       done_queue_->add(create_task(DAQ_TASK_TYPE_COMPLETE), true);
       LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => done_queue notification complete");
     }
+    if (task->type_ == DAQ_TASK_TYPE_SHUTDOWN){
+      // Set the execute flag to false
+      executing = false;
+    }
   }
+  // unbind the data socket
+  data_socket->unbind(endpoint.c_str());
+  // destroy the socket
+  data_socket->close();
+  delete(data_socket);
+  LOG4CXX_INFO(logger_, "Stopping worker task with ID [" << boost::this_thread::get_id() << "]");
 }
 
 //                TODO: this metadata stuff is probably quite fragile...make it better

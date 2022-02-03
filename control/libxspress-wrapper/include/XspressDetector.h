@@ -24,6 +24,9 @@
 using namespace log4cxx;
 using namespace log4cxx::helpers;
 
+#define XSP_MODE_MCA "mca"
+#define XSP_MODE_LIST "list"
+
 namespace Xspress
 {
 
@@ -41,11 +44,15 @@ class XspressDetector
 public:
   XspressDetector(bool simulation=false);
   virtual ~XspressDetector();
+  std::string getVersionString();
   void setErrorString(const std::string& error);
   std::string getErrorString();
   void checkErrorCode(const std::string& prefix, int code);
   int connect();
+  int connect_mca_mode();
+  int connect_list_mode();
   int checkConnected();
+  int disconnect();
   int setupChannels();
   int enableDAQ();
   int checkSaveDir(const std::string& dir_name);
@@ -83,8 +90,8 @@ public:
   int getXspRunFlags();
   void setXspDTCEnergy(double energy);
   double getXspDTCEnergy();
-  void setXspTriggerMode(const std::string& mode);
-  std::string getXspTriggerMode();
+  void setXspTriggerMode(int mode);
+  int getXspTriggerMode();
   void setXspInvertF0(int invert_f0);
   int getXspInvertF0();
   void setXspInvertVeto(int invert_veto);
@@ -95,6 +102,8 @@ public:
   double getXspExposureTime();
   void setXspFrames(int frames);
   int getXspFrames();
+  void setXspMode(const std::string& mode);
+  std::string getXspMode();
   void setXspDAQEndpoints(std::vector<std::string> endpoints);
   std::vector<std::string> getXspDAQEndpoints();
   
@@ -144,7 +153,7 @@ private:
   /** Clock period */
   double                        xsp_clock_period_;
   /** Trigger mode */
-  std::string                   xsp_trigger_mode_;
+  int                           xsp_trigger_mode_;
   /** Invert f0 */
   int                           xsp_invert_f0_;
   /** Invert veto */
@@ -155,6 +164,8 @@ private:
   double                        xsp_exposure_time_;
   /** Number of frames */
   int                           xsp_frames_;
+  /** Mode of operation */
+  std::string                   xsp_mode_;
   /** DAQ endpoints */
   std::vector<std::string>      xsp_daq_endpoints_;
   
