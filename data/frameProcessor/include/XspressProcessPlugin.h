@@ -51,6 +51,10 @@ private:
 
         void configure(OdinData::IpcMessage &config, OdinData::IpcMessage &reply);
 
+        void requestConfiguration(OdinData::IpcMessage& reply);
+
+        void configureProcess(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
+
         // version related functions
         int get_version_major();
 
@@ -77,8 +81,19 @@ private:
         uint32_t num_channels_;
         uint32_t frames_per_block_;
         uint32_t current_block_start_;
+        uint32_t concurrent_processes_;
+        uint32_t concurrent_rank_;
+        std::string acq_id_;
+
 
         std::vector<boost::shared_ptr<XspressMemoryBlock> > memory_ptrs_;
+
+        /** Configuration constant for the acquisition ID used for meta data writing */
+        static const std::string CONFIG_ACQ_ID;
+
+        static const std::string CONFIG_PROCESS;
+        static const std::string CONFIG_PROCESS_NUMBER;
+        static const std::string CONFIG_PROCESS_RANK;
 
         static const std::string CONFIG_FRAMES;
 

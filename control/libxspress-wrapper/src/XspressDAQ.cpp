@@ -151,7 +151,7 @@ void XspressDAQ::controlTask()
         if (status == XSP_STATUS_OK){
           uint32_t frames_to_read = num_frames - frames_read;
           if (frames_to_read > 0){
-              LOG4CXX_DEBUG_LEVEL(0, logger_, "Current frames to read: " << frames_read << " - " << num_frames-1);
+            LOG4CXX_DEBUG_LEVEL(3, logger_, "Current frames to read: " << frames_read << " - " << num_frames-1);
             // Notify the worker threads to process the frames
             std::vector<boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > >::iterator iter;
             for (iter = work_queues_.begin(); iter != work_queues_.end(); ++iter){
@@ -164,7 +164,7 @@ void XspressDAQ::controlTask()
             }
             // Once all worker threads have completed notify the circular buffer
             status = detector_->histogram_circ_ack(0, frames_read, frames_to_read, num_channels_);
-            LOG4CXX_DEBUG_LEVEL(0, logger_, "Ack circular buffer [status=" << status << "] frames_read[" << frames_read << "] frames_to_read[" << frames_to_read << "]");
+            LOG4CXX_DEBUG_LEVEL(3, logger_, "Ack circular buffer [status=" << status << "] frames_read[" << frames_read << "] frames_to_read[" << frames_to_read << "]");
             LOG4CXX_DEBUG_LEVEL(4, logger_, "Worker threads completed and circular buffer acknowledgement sent");
             // Set frames read to correct value
             frames_read = num_frames;

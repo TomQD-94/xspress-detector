@@ -86,6 +86,31 @@ private:
   static const std::string CONFIG_XSP_EXPOSURE_TIME;
   static const std::string CONFIG_XSP_FRAMES;
   static const std::string CONFIG_XSP_MODE;
+  static const std::string CONFIG_XSP_SCA5_LOW;
+  static const std::string CONFIG_XSP_SCA5_HIGH;
+  static const std::string CONFIG_XSP_SCA6_LOW;
+  static const std::string CONFIG_XSP_SCA6_HIGH;
+  static const std::string CONFIG_XSP_SCA4_THRESH;
+
+  static const std::string CONFIG_XSP_DTC_FLAGS;
+  static const std::string CONFIG_XSP_DTC_ALL_EVT_OFF;
+  static const std::string CONFIG_XSP_DTC_ALL_EVT_GRAD;
+  static const std::string CONFIG_XSP_DTC_ALL_EVT_RATE_OFF;
+  static const std::string CONFIG_XSP_DTC_ALL_EVT_RATE_GRAD;
+  static const std::string CONFIG_XSP_DTC_IN_WIN_OFF;
+  static const std::string CONFIG_XSP_DTC_IN_WIN_GRAD;
+  static const std::string CONFIG_XSP_DTC_IN_WIN_RATE_OFF;
+  static const std::string CONFIG_XSP_DTC_IN_WIN_RATE_GRAD;
+
+  std::vector<int>              xsp_dtc_flags_;
+  std::vector<double>           xsp_dtc_all_event_off_;
+  std::vector<double>           xsp_dtc_all_event_grad_;
+  std::vector<double>           xsp_dtc_all_event_rate_off_;
+  std::vector<double>           xsp_dtc_all_event_rate_grad_;
+  std::vector<double>           xsp_dtc_in_window_off_;
+  std::vector<double>           xsp_dtc_in_window_grad_;
+  std::vector<double>           xsp_dtc_in_window_rate_off_;
+  std::vector<double>           xsp_dtc_in_window_rate_grad_;
 
   /** Configuration constants for DAQ class **/
   static const std::string CONFIG_DAQ;

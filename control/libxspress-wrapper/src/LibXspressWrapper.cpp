@@ -90,50 +90,50 @@ void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code)
       // No error here, pass through
       break;
     case XSP3_ERROR:
-      err << prefix << " error [" << code << "] XSP3_ERROR";
+      err << prefix << " error [" << code << "] XSP3_ERROR: " << xsp3_get_error_message();
       break;
     case XSP3_INVALID_PATH:
-      err << prefix << " error [" << code << "] XSP3_INVALID_PATH";
+      err << prefix << " error [" << code << "] XSP3_INVALID_PATH: " << xsp3_get_error_message();
       break;
     case XSP3_ILLEGAL_CARD:
-      err << prefix << " error [" << code << "] XSP3_ILLEGAL_CARD";
+      err << prefix << " error [" << code << "] XSP3_ILLEGAL_CARD: " << xsp3_get_error_message();
       break;
     case XSP3_ILLEGAL_SUBPATH:
-      err << prefix << " error [" << code << "] XSP3_ILLEGAL_SUBPATH";
+      err << prefix << " error [" << code << "] XSP3_ILLEGAL_SUBPATH: " << xsp3_get_error_message();
       break;
     case XSP3_INVALID_DMA_STREAM:
-      err << prefix << " error [" << code << "] XSP3_INVALID_DMA_STREAM";
+      err << prefix << " error [" << code << "] XSP3_INVALID_DMA_STREAM: " << xsp3_get_error_message();
       break;
     case XSP3_RANGE_CHECK:
-      err << prefix << " error [" << code << "] XSP3_RANGE_CHECK";
+      err << prefix << " error [" << code << "] XSP3_RANGE_CHECK: " << xsp3_get_error_message();
       break;
     case XSP3_INVALID_SCOPE_MOD:
-      err << prefix << " error [" << code << "] XSP3_INVALID_SCOPE_MOD";
+      err << prefix << " error [" << code << "] XSP3_INVALID_SCOPE_MOD: " << xsp3_get_error_message();
       break;
     case XSP3_OUT_OF_MEMORY:
-      err << prefix << " error [" << code << "] XSP3_OUT_OF_MEMORY";
+      err << prefix << " error [" << code << "] XSP3_OUT_OF_MEMORY: " << xsp3_get_error_message();
       break;
     case XSP3_ERR_DEV_NOT_FOUND:
-      err << prefix << " error [" << code << "] XSP3_ERR_DEV_NOT_FOUND";
+      err << prefix << " error [" << code << "] XSP3_ERR_DEV_NOT_FOUND: " << xsp3_get_error_message();
       break;
     case XSP3_CANNOT_OPEN_FILE:
-      err << prefix << " error [" << code << "] XSP3_CANNOT_OPEN_FILE";
+      err << prefix << " error [" << code << "] XSP3_CANNOT_OPEN_FILE: " << xsp3_get_error_message();
       break;
     case XSP3_FILE_READ_FAILED:
-      err << prefix << " error [" << code << "] XSP3_FILE_READ_FAILED";
+      err << prefix << " error [" << code << "] XSP3_FILE_READ_FAILED: " << xsp3_get_error_message();
       break;
     case XSP3_FILE_WRITE_FAILED:
-      err << prefix << " error [" << code << "] XSP3_FILE_WRITE_FAILED";
+      err << prefix << " error [" << code << "] XSP3_FILE_WRITE_FAILED: " << xsp3_get_error_message();
       break;
     case XSP3_FILE_RENAME_FAILED:
-      err << prefix << " error [" << code << "] XSP3_FILE_RENAME_FAILED";
+      err << prefix << " error [" << code << "] XSP3_FILE_RENAME_FAILED: " << xsp3_get_error_message();
       break;
     case XSP3_LOG_FILE_MISSING:
-      err << prefix << " error [" << code << "] XSP3_LOG_FILE_MISSING";
+      err << prefix << " error [" << code << "] XSP3_LOG_FILE_MISSING: " << xsp3_get_error_message();
       break;
     default:
       // Uknown error code here
-      err << prefix << " error [" << code << "] Unknown error code";
+      err << prefix << " error [" << code << "] Unknown error code: " << xsp3_get_error_message();
   }
   if (code != XSP3_OK){
     setErrorString(err.str());
@@ -534,6 +534,79 @@ int LibXspressWrapper::read_dropped_frames(std::vector<int32_t>& dropped_frames)
 }
 
 int LibXspressWrapper::read_dtc_params(int max_channels,
+                                       std::vector<int>& dtc_flags,
+                                       std::vector<double>& dtc_all_event_off,
+                                       std::vector<double>& dtc_all_event_grad,
+                                       std::vector<double>& dtc_all_event_rate_off,
+                                       std::vector<double>& dtc_all_event_rate_grad,
+                                       std::vector<double>& dtc_in_window_off,
+                                       std::vector<double>& dtc_in_window_grad,
+                                       std::vector<double>& dtc_in_window_rate_off,
+                                       std::vector<double>& dtc_in_window_rate_grad)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status = 0;
+  int xsp_dtc_flags = 0;
+  double xsp_dtc_all_event_off = 0.0;
+  double xsp_dtc_all_event_grad = 0.0;
+  double xsp_dtc_all_event_rate_off = 0.0;
+  double xsp_dtc_all_event_rate_grad = 0.0;
+  double xsp_dtc_in_window_off = 0.0;
+  double xsp_dtc_in_window_grad = 0.0;
+  double xsp_dtc_in_window_rate_off = 0.0;
+  double xsp_dtc_in_window_rate_grad = 0.0;
+
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_getDeadtimeCorrectionParameters2");
+
+  // Clear the arrays
+  dtc_flags.clear();
+  dtc_all_event_off.clear();
+  dtc_all_event_grad.clear();
+  dtc_all_event_rate_off.clear();
+  dtc_all_event_rate_grad.clear();
+  dtc_in_window_off.clear();
+  dtc_in_window_grad.clear();
+  dtc_in_window_rate_off.clear();
+  dtc_in_window_rate_grad.clear();
+
+  for (int chan = 0; chan < max_channels; chan++) {
+    xsp_status = xsp3_getDeadtimeCorrectionParameters2(xsp_handle_,
+                                                       chan,
+                                                       &xsp_dtc_flags,
+                                                       &xsp_dtc_all_event_off,
+                                                       &xsp_dtc_all_event_grad,
+                                                       &xsp_dtc_all_event_rate_off,
+                                                       &xsp_dtc_all_event_rate_grad,
+                                                       &xsp_dtc_in_window_off,
+                                                       &xsp_dtc_in_window_grad,
+                                                       &xsp_dtc_in_window_rate_off,
+                                                       &xsp_dtc_in_window_rate_grad);
+    if (xsp_status < XSP3_OK){
+      checkErrorCode("xsp3_getDeadtimeCorrectionParameters", xsp_status);
+      status = XSP_STATUS_ERROR;
+    } else {
+      LOG4CXX_DEBUG_LEVEL(1, logger_, "Channel " << chan <<
+                                      " Dead Time Correction Params: Flags: " << xsp_dtc_flags <<
+                                      ", All Event Grad: " << xsp_dtc_all_event_grad <<
+                                      ", All Event Off: " << xsp_dtc_all_event_off <<
+                                      ", In Win Off: " << xsp_dtc_in_window_off <<
+                                      ", In Win Grad: " << xsp_dtc_in_window_grad);
+
+      dtc_flags.push_back(xsp_dtc_flags);
+      dtc_all_event_off.push_back(xsp_dtc_all_event_off);
+      dtc_all_event_grad.push_back(xsp_dtc_all_event_grad);
+      dtc_all_event_rate_off.push_back(xsp_dtc_all_event_rate_off);
+      dtc_all_event_rate_grad.push_back(xsp_dtc_all_event_rate_grad);
+      dtc_in_window_off.push_back(xsp_dtc_in_window_off);
+      dtc_in_window_grad.push_back(xsp_dtc_in_window_grad);
+      dtc_in_window_rate_off.push_back(xsp_dtc_in_window_rate_off);
+      dtc_in_window_rate_grad.push_back(xsp_dtc_in_window_rate_grad);
+    }
+  }
+  return status;
+}
+/*
+int LibXspressWrapper::read_dtc_params(int max_channels,
                                        std::vector<int>& dtci,
                                        std::vector<double>& dtcd,
                                        bool& parameters_updated)
@@ -623,10 +696,19 @@ int LibXspressWrapper::read_dtc_params(int max_channels,
   }
   return status;
 }
+*/
+
 
 int LibXspressWrapper::write_dtc_params(int max_channels,
-                                        std::vector<int>& dtci,
-                                        std::vector<double>& dtcd)
+                                        std::vector<int>& dtc_flags,
+                                        std::vector<double>& dtc_all_event_off,
+                                        std::vector<double>& dtc_all_event_grad,
+                                        std::vector<double>& dtc_all_event_rate_off,
+                                        std::vector<double>& dtc_all_event_rate_grad,
+                                        std::vector<double>& dtc_in_window_off,
+                                        std::vector<double>& dtc_in_window_grad,
+                                        std::vector<double>& dtc_in_window_rate_off,
+                                        std::vector<double>& dtc_in_window_rate_grad)
 {
   int status = XSP_STATUS_OK;
   int xsp_status = 0;
@@ -641,43 +723,31 @@ int LibXspressWrapper::write_dtc_params(int max_channels,
   double xsp_dtc_in_window_rate_grad = 0.0;
 
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_setDeadtimeCorrectionParameters2");
-  if (dtci.size() != (max_channels * XSP3_NUM_DTC_INT_PARAMS)){
-    setErrorString("DTC integer vector has a different size to the number of parameters");
-    status = XSP_STATUS_ERROR;
-  }
+  for (int chan = 0; chan < max_channels; chan++) {
+    xsp_dtc_flags = dtc_flags[chan];
+    xsp_dtc_all_event_off = dtc_all_event_off[chan];
+    xsp_dtc_all_event_grad = dtc_all_event_grad[chan];
+    xsp_dtc_all_event_rate_off = dtc_all_event_rate_off[chan];
+    xsp_dtc_all_event_rate_grad = dtc_all_event_rate_grad[chan];
+    xsp_dtc_in_window_off = dtc_in_window_off[chan];
+    xsp_dtc_in_window_grad = dtc_in_window_grad[chan];
+    xsp_dtc_in_window_rate_off = dtc_in_window_rate_off[chan];
+    xsp_dtc_in_window_rate_grad = dtc_in_window_rate_grad[chan];
 
-  if (dtcd.size() != (max_channels * XSP3_NUM_DTC_INT_PARAMS)){
-    setErrorString("DTC double vector has a different size to the number of parameters");
-    status = XSP_STATUS_ERROR;
-  }
-
-  if (status == XSP_STATUS_OK){
-    for (int chan = 0; chan < max_channels; chan++) {
-      xsp_dtc_flags = dtci[chan * XSP3_NUM_DTC_INT_PARAMS + XSP3_DTC_FLAGS];
-      xsp_dtc_all_event_off = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AEO];
-      xsp_dtc_all_event_grad = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AEG];
-      xsp_dtc_all_event_rate_off = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AERO];
-      xsp_dtc_all_event_rate_grad = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_AERG];
-      xsp_dtc_in_window_off = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWO];
-      xsp_dtc_in_window_grad = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWG];
-      xsp_dtc_in_window_rate_off = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWRO];
-      xsp_dtc_in_window_rate_grad = dtcd[chan * XSP3_NUM_DTC_FLOAT_PARAMS + XSP3_DTC_IWRG];
-
-      xsp_status = xsp3_setDeadtimeCorrectionParameters2(xsp_handle_,
-                                                        chan,
-                                                        xsp_dtc_flags,
-                                                        xsp_dtc_all_event_off,
-                                                        xsp_dtc_all_event_grad,
-                                                        xsp_dtc_all_event_rate_off,
-                                                        xsp_dtc_all_event_rate_grad,
-                                                        xsp_dtc_in_window_off,
-                                                        xsp_dtc_in_window_grad,
-                                                        xsp_dtc_in_window_rate_off,
-                                                        xsp_dtc_in_window_rate_grad);
-      if (xsp_status < XSP3_OK) {
-        checkErrorCode("xsp3_setDeadtimeCorrectionParameters", xsp_status);
-        status = XSP_STATUS_ERROR;
-      }
+    xsp_status = xsp3_setDeadtimeCorrectionParameters2(xsp_handle_,
+                                                       chan,
+                                                       xsp_dtc_flags,
+                                                       xsp_dtc_all_event_off,
+                                                       xsp_dtc_all_event_grad,
+                                                       xsp_dtc_all_event_rate_off,
+                                                       xsp_dtc_all_event_rate_grad,
+                                                       xsp_dtc_in_window_off,
+                                                       xsp_dtc_in_window_grad,
+                                                       xsp_dtc_in_window_rate_off,
+                                                       xsp_dtc_in_window_rate_grad);
+    if (xsp_status < XSP3_OK) {
+      checkErrorCode("xsp3_setDeadtimeCorrectionParameters", xsp_status);
+      status = XSP_STATUS_ERROR;
     }
   }
   return status;
@@ -1060,6 +1130,43 @@ int LibXspressWrapper::validate_histogram_dims(uint32_t num_eng,
 
   if (status == XSP_STATUS_OK){
     *buffer_length = (uint32_t) (total_tf);
+  }
+  return status;
+}
+
+int LibXspressWrapper::set_window(int chan, int sca, int llm, int hlm)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status;
+
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "set_window called with chan=" << chan <<
+                                  " sca=" << sca << " llm=" << llm << " hlm=" << hlm);
+
+  if (llm > hlm){
+    checkErrorCode("set_window SCA low limit is higher than high limit", XSP3_RANGE_CHECK);
+    status = XSP_STATUS_ERROR;
+  } else {
+    xsp_status = xsp3_set_window(xsp_handle_, chan, sca, llm, hlm);
+    if (xsp_status != XSP3_OK) {
+      checkErrorCode("xsp3_set_window", xsp_status);
+      status = XSP_STATUS_ERROR;
+    }
+  }
+  return status;
+}
+
+int LibXspressWrapper::set_sca_thresh(int chan, int value)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status;
+
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "set_sca_thresh called with chan=" << chan <<
+                                  " value=" << value);
+
+  xsp_status = xsp3_set_good_thres(xsp_handle_, chan, value);
+  if (xsp_status != XSP3_OK) {
+    checkErrorCode("xsp3_set_good_thres", xsp_status);
+    status = XSP_STATUS_ERROR;
   }
   return status;
 }

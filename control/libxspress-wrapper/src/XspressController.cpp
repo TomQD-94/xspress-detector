@@ -14,43 +14,58 @@
 namespace Xspress
 {
 
-const std::string XspressController::CONFIG_APP                   = "app";
-const std::string XspressController::CONFIG_APP_SHUTDOWN          = "shutdown";
-const std::string XspressController::CONFIG_APP_DEBUG             = "debug_level";
-const std::string XspressController::CONFIG_APP_CTRL_ENDPOINT     = "ctrl_endpoint";
+const std::string XspressController::CONFIG_APP                       = "app";
+const std::string XspressController::CONFIG_APP_SHUTDOWN              = "shutdown";
+const std::string XspressController::CONFIG_APP_DEBUG                 = "debug_level";
+const std::string XspressController::CONFIG_APP_CTRL_ENDPOINT         = "ctrl_endpoint";
 
-const std::string XspressController::CONFIG_XSP                   = "config";
-const std::string XspressController::CONFIG_XSP_NUM_CARDS         = "num_cards";
-const std::string XspressController::CONFIG_XSP_NUM_TF            = "num_tf";
-const std::string XspressController::CONFIG_XSP_BASE_IP           = "base_ip";
-const std::string XspressController::CONFIG_XSP_MAX_CHANNELS      = "max_channels";
-const std::string XspressController::CONFIG_XSP_MAX_SPECTRA       = "max_spectra";
-const std::string XspressController::CONFIG_XSP_DEBUG             = "debug";
-const std::string XspressController::CONFIG_XSP_CONFIG_PATH       = "config_path";
-const std::string XspressController::CONFIG_XSP_CONFIG_SAVE_PATH  = "config_save_path";
-const std::string XspressController::CONFIG_XSP_USE_RESGRADES     = "use_resgrades";
-const std::string XspressController::CONFIG_XSP_RUN_FLAGS         = "run_flags";
-const std::string XspressController::CONFIG_XSP_DTC_ENERGY        = "dtc_energy";
-const std::string XspressController::CONFIG_XSP_TRIGGER_MODE      = "trigger_mode";
-const std::string XspressController::CONFIG_XSP_INVERT_F0         = "invert_f0";
-const std::string XspressController::CONFIG_XSP_INVERT_VETO       = "invert_veto";
-const std::string XspressController::CONFIG_XSP_DEBOUNCE          = "debounce";
-const std::string XspressController::CONFIG_XSP_EXPOSURE_TIME     = "exposure_time";
-const std::string XspressController::CONFIG_XSP_FRAMES            = "num_images";
-const std::string XspressController::CONFIG_XSP_MODE              = "mode";
+const std::string XspressController::CONFIG_XSP                       = "config";
+const std::string XspressController::CONFIG_XSP_NUM_CARDS             = "num_cards";
+const std::string XspressController::CONFIG_XSP_NUM_TF                = "num_tf";
+const std::string XspressController::CONFIG_XSP_BASE_IP               = "base_ip";
+const std::string XspressController::CONFIG_XSP_MAX_CHANNELS          = "max_channels";
+const std::string XspressController::CONFIG_XSP_MAX_SPECTRA           = "max_spectra";
+const std::string XspressController::CONFIG_XSP_DEBUG                 = "debug";
+const std::string XspressController::CONFIG_XSP_CONFIG_PATH           = "config_path";
+const std::string XspressController::CONFIG_XSP_CONFIG_SAVE_PATH      = "config_save_path";
+const std::string XspressController::CONFIG_XSP_USE_RESGRADES         = "use_resgrades";
+const std::string XspressController::CONFIG_XSP_RUN_FLAGS             = "run_flags";
+const std::string XspressController::CONFIG_XSP_DTC_ENERGY            = "dtc_energy";
+const std::string XspressController::CONFIG_XSP_TRIGGER_MODE          = "trigger_mode";
+const std::string XspressController::CONFIG_XSP_INVERT_F0             = "invert_f0";
+const std::string XspressController::CONFIG_XSP_INVERT_VETO           = "invert_veto";
+const std::string XspressController::CONFIG_XSP_DEBOUNCE              = "debounce";
+const std::string XspressController::CONFIG_XSP_EXPOSURE_TIME         = "exposure_time";
+const std::string XspressController::CONFIG_XSP_FRAMES                = "num_images";
+const std::string XspressController::CONFIG_XSP_MODE                  = "mode";
+const std::string XspressController::CONFIG_XSP_SCA5_LOW              = "sca5_low_lim";
+const std::string XspressController::CONFIG_XSP_SCA5_HIGH             = "sca5_high_lim";
+const std::string XspressController::CONFIG_XSP_SCA6_LOW              = "sca6_low_lim";
+const std::string XspressController::CONFIG_XSP_SCA6_HIGH             = "sca6_high_lim";
+const std::string XspressController::CONFIG_XSP_SCA4_THRESH           = "sca4_threshold";
 
-const std::string XspressController::CONFIG_DAQ                   = "daq";
-const std::string XspressController::CONFIG_DAQ_ENABLED           = "enabled";
-const std::string XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS     = "endpoints";
+const std::string XspressController::CONFIG_XSP_DTC_FLAGS             = "dtc_flags";
+const std::string XspressController::CONFIG_XSP_DTC_ALL_EVT_OFF       = "dtc_all_evt_off";
+const std::string XspressController::CONFIG_XSP_DTC_ALL_EVT_GRAD      = "dtc_all_evt_grad";
+const std::string XspressController::CONFIG_XSP_DTC_ALL_EVT_RATE_OFF  = "dtc_all_evt_rate_off";
+const std::string XspressController::CONFIG_XSP_DTC_ALL_EVT_RATE_GRAD = "dtc_all_evt_rate_grad";
+const std::string XspressController::CONFIG_XSP_DTC_IN_WIN_OFF        = "dtc_in_win_off";
+const std::string XspressController::CONFIG_XSP_DTC_IN_WIN_GRAD       = "dtc_in_win_grad";
+const std::string XspressController::CONFIG_XSP_DTC_IN_WIN_RATE_OFF   = "dtc_in_win_rate_off";
+const std::string XspressController::CONFIG_XSP_DTC_IN_WIN_RATE_GRAD  = "dtc_in_win_rate_grad";
 
-const std::string XspressController::CONFIG_CMD                   = "cmd";
-const std::string XspressController::CONFIG_CMD_CONNECT           = "connect";
-const std::string XspressController::CONFIG_CMD_DISCONNECT        = "disconnect";
-const std::string XspressController::CONFIG_CMD_SAVE              = "save";
-const std::string XspressController::CONFIG_CMD_RESTORE           = "restore";
-const std::string XspressController::CONFIG_CMD_START             = "start";
-const std::string XspressController::CONFIG_CMD_STOP              = "stop";
-const std::string XspressController::CONFIG_CMD_TRIGGER           = "trigger";
+const std::string XspressController::CONFIG_DAQ                       = "daq";
+const std::string XspressController::CONFIG_DAQ_ENABLED               = "enabled";
+const std::string XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS         = "endpoints";
+
+const std::string XspressController::CONFIG_CMD                       = "cmd";
+const std::string XspressController::CONFIG_CMD_CONNECT               = "connect";
+const std::string XspressController::CONFIG_CMD_DISCONNECT            = "disconnect";
+const std::string XspressController::CONFIG_CMD_SAVE                  = "save";
+const std::string XspressController::CONFIG_CMD_RESTORE               = "restore";
+const std::string XspressController::CONFIG_CMD_START                 = "start";
+const std::string XspressController::CONFIG_CMD_STOP                  = "stop";
+const std::string XspressController::CONFIG_CMD_TRIGGER               = "trigger";
 
 const std::string XspressController::CONFIG_XSP_MODE_MCA          = XSP_MODE_MCA;
 const std::string XspressController::CONFIG_XSP_MODE_LIST         = XSP_MODE_LIST;
@@ -194,6 +209,13 @@ void XspressController::handleCtrlChannel()
  */
 void XspressController::provideStatus(OdinData::IpcMessage& reply)
 {
+
+    std::vector<uint32_t> sca5ll = xsp_.getSca5LowLimits();
+  for (int index = 0; index < sca5ll.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_SCA5_LOW + "[]", sca5ll[index]);
+  }
+
 }
 
 /** Provide version information to requesting clients.
@@ -287,6 +309,8 @@ void XspressController::configureApp(OdinData::IpcMessage& config, OdinData::Ipc
  */
 void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
 {
+  int status = XSP_STATUS_OK;
+
   // Check for the number of cards
   if (config.has_param(XspressController::CONFIG_XSP_NUM_CARDS)){
     int num_cards = config.get_param<int>(XspressController::CONFIG_XSP_NUM_CARDS);
@@ -416,6 +440,96 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     } else {
       LOG4CXX_DEBUG_LEVEL(1, logger_, "mode set to " << mode);
       xsp_.setXspMode(mode);
+    }
+  }
+
+  // Check for sc5 low limit array parameter
+  if (config.has_param(XspressController::CONFIG_XSP_SCA5_LOW)){
+    const rapidjson::Value& val = config.get_param<const rapidjson::Value&>(XspressController::CONFIG_XSP_SCA5_LOW);
+    // Create the vector of limits
+    std::vector<uint32_t> sca5low;
+    for (rapidjson::SizeType i = 0; i < val.Size(); i++) {
+      const rapidjson::Value& ll = val[i];
+      uint32_t ival = ll.GetInt();
+      LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 5 low limit [" << i << "] = " << ival);
+      sca5low.push_back(ival);
+    }
+    status = xsp_.setSca5LowLimits(sca5low);
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
+
+  // Check for sc5 high limit array parameter
+  if (config.has_param(XspressController::CONFIG_XSP_SCA5_HIGH)){
+    const rapidjson::Value& val = config.get_param<const rapidjson::Value&>(XspressController::CONFIG_XSP_SCA5_HIGH);
+    // Create the vector of limits
+    std::vector<uint32_t> sca5high;
+    for (rapidjson::SizeType i = 0; i < val.Size(); i++) {
+      const rapidjson::Value& hl = val[i];
+      uint32_t ival = hl.GetInt();
+      LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 5 high limit [" << i << "] = " << ival);
+      sca5high.push_back(ival);
+    }
+    status = xsp_.setSca5HighLimits(sca5high);
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
+
+  // Check for sc6 low limit array parameter
+  if (config.has_param(XspressController::CONFIG_XSP_SCA6_LOW)){
+    const rapidjson::Value& val = config.get_param<const rapidjson::Value&>(XspressController::CONFIG_XSP_SCA6_LOW);
+    // Create the vector of limits
+    std::vector<uint32_t> sca6low;
+    for (rapidjson::SizeType i = 0; i < val.Size(); i++) {
+      const rapidjson::Value& ll = val[i];
+      uint32_t ival = ll.GetInt();
+      LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 6 low limit [" << i << "] = " << ival);
+      sca6low.push_back(ival);
+    }
+    status = xsp_.setSca6LowLimits(sca6low);
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
+
+  // Check for sc6 high limit array parameter
+  if (config.has_param(XspressController::CONFIG_XSP_SCA6_HIGH)){
+    const rapidjson::Value& val = config.get_param<const rapidjson::Value&>(XspressController::CONFIG_XSP_SCA6_HIGH);
+    // Create the vector of limits
+    std::vector<uint32_t> sca6high;
+    for (rapidjson::SizeType i = 0; i < val.Size(); i++) {
+      const rapidjson::Value& hl = val[i];
+      uint32_t ival = hl.GetInt();
+      LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 6 high limit [" << i << "] = " << ival);
+      sca6high.push_back(ival);
+    }
+    status = xsp_.setSca6HighLimits(sca6high);
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+    }
+  }
+
+  // Check for sc6 high limit array parameter
+  if (config.has_param(XspressController::CONFIG_XSP_SCA4_THRESH)){
+    const rapidjson::Value& val = config.get_param<const rapidjson::Value&>(XspressController::CONFIG_XSP_SCA4_THRESH);
+    // Create the vector of limits
+    std::vector<uint32_t> sca4t;
+    for (rapidjson::SizeType i = 0; i < val.Size(); i++) {
+      const rapidjson::Value& th = val[i];
+      uint32_t ival = th.GetInt();
+      LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 4 threshold [" << i << "] = " << ival);
+      sca4t.push_back(ival);
+    }
+    status = xsp_.setSca4Thresholds(sca4t);
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
     }
   }
 
@@ -578,6 +692,85 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
                   XspressController::CONFIG_XSP_EXPOSURE_TIME, xsp_.getXspExposureTime());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_FRAMES, xsp_.getXspFrames());
+  std::vector<uint32_t> sca5ll = xsp_.getSca5LowLimits();
+  for (int index = 0; index < sca5ll.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_SCA5_LOW + "[]", sca5ll[index]);
+  }
+  std::vector<uint32_t> sca5hl = xsp_.getSca5HighLimits();
+  for (int index = 0; index < sca5hl.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_SCA5_HIGH + "[]", sca5hl[index]);
+  }
+  std::vector<uint32_t> sca6ll = xsp_.getSca6LowLimits();
+  for (int index = 0; index < sca6ll.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_SCA6_LOW + "[]", sca6ll[index]);
+  }
+  std::vector<uint32_t> sca6hl = xsp_.getSca6HighLimits();
+  for (int index = 0; index < sca6hl.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_SCA6_HIGH + "[]", sca6hl[index]);
+  }
+  std::vector<uint32_t> sca4t = xsp_.getSca4Thresholds();
+  for (int index = 0; index < sca4t.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_SCA4_THRESH + "[]", sca4t[index]);
+  }
+  std::vector<int> dtc_flags = xsp_.getDtcFlags();
+  for (int index = 0; index < dtc_flags.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_FLAGS + "[]", dtc_flags[index]);
+  }
+
+  std::vector<double> dtc_all_event_off = xsp_.getDtcAllEventOff();
+  for (int index = 0; index < dtc_all_event_off.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_ALL_EVT_OFF + "[]", dtc_all_event_off[index]);
+  }
+
+  std::vector<double> dtc_all_event_grad = xsp_.getDtcAllEventGrad();
+  for (int index = 0; index < dtc_all_event_grad.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_ALL_EVT_GRAD + "[]", dtc_all_event_grad[index]);
+  }
+
+  std::vector<double> dtc_all_event_rate_off = xsp_.getDtcAllEventRateOff();
+  for (int index = 0; index < dtc_all_event_rate_off.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_ALL_EVT_RATE_OFF + "[]", dtc_all_event_rate_off[index]);
+  }
+
+  std::vector<double> dtc_all_event_rate_grad = xsp_.getDtcAllEventRateGrad();
+  for (int index = 0; index < dtc_all_event_rate_grad.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_ALL_EVT_RATE_GRAD + "[]", dtc_all_event_rate_grad[index]);
+  }
+
+  std::vector<double> dtc_in_window_off = xsp_.getDtcInWindowOff();
+  for (int index = 0; index < dtc_in_window_off.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_IN_WIN_OFF + "[]", dtc_in_window_off[index]);
+  }
+
+  std::vector<double> dtc_in_window_grad = xsp_.getDtcInWindowGrad();
+  for (int index = 0; index < dtc_in_window_grad.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_IN_WIN_GRAD + "[]", dtc_in_window_grad[index]);
+  }
+
+  std::vector<double> dtc_in_window_rate_off = xsp_.getDtcInWindowRateOff();
+  for (int index = 0; index < dtc_in_window_rate_off.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_IN_WIN_RATE_OFF + "[]", dtc_in_window_rate_off[index]);
+  }
+
+  std::vector<double> dtc_in_window_rate_grad = xsp_.getDtcInWindowRateGrad();
+  for (int index = 0; index < dtc_in_window_rate_grad.size(); index++){
+    reply.set_param(XspressController::CONFIG_XSP + "/" +
+                    XspressController::CONFIG_XSP_DTC_IN_WIN_RATE_GRAD + "[]", dtc_in_window_rate_grad[index]);
+  }
+
   std::vector<std::string> eps = xsp_.getXspDAQEndpoints();
   for (int index = 0; index < eps.size(); index++){
     reply.set_param(XspressController::CONFIG_DAQ + "/" +

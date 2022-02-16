@@ -9,9 +9,15 @@
 
 namespace FrameProcessor {
 
-const std::string XspressProcessPlugin::CONFIG_FRAMES =     "frames";
-const std::string XspressProcessPlugin::CONFIG_DTC_FLAGS =  "dtc/flags";
-const std::string XspressProcessPlugin::CONFIG_DTC_PARAMS = "dtc/params";
+const std::string XspressProcessPlugin::CONFIG_ACQ_ID               = "acq_id";
+
+const std::string XspressProcessPlugin::CONFIG_PROCESS              = "process";
+const std::string XspressProcessPlugin::CONFIG_PROCESS_NUMBER       = "number";
+const std::string XspressProcessPlugin::CONFIG_PROCESS_RANK         = "rank";
+
+const std::string XspressProcessPlugin::CONFIG_FRAMES               = "frames";
+const std::string XspressProcessPlugin::CONFIG_DTC_FLAGS            = "dtc/flags";
+const std::string XspressProcessPlugin::CONFIG_DTC_PARAMS           = "dtc/params";
 
 
 XspressMemoryBlock::XspressMemoryBlock() :
@@ -108,7 +114,10 @@ XspressProcessPlugin::XspressProcessPlugin() :
   num_energy_bins_(4096),
   num_channels_(0),
   frames_per_block_(256),
-  current_block_start_(0)
+  current_block_start_(0),
+  concurrent_processes_(1),
+  concurrent_rank_(0),
+  acq_id_("")
 {
   // Setup logging for the class
   logger_ = Logger::getLogger("FP.XspressProcessPlugin");
@@ -127,32 +136,52 @@ void XspressProcessPlugin::configure(OdinData::IpcMessage& config, OdinData::Ipc
     LOG4CXX_INFO(logger_, "Number of frames has been set to  " << num_frames_);
   }
 
-/*         if (dtcParams != NULL) delete [] dtcParams;
-         if (dtcFlags != NULL) delete [] dtcFlags;
-         const rapidjson::Value& params = config.get_param<const rapidjson::Value&>(CONFIG_DTC_PARAMS);
-         const rapidjson::Value& flags = config.get_param<const rapidjson::Value&>(CONFIG_DTC_FLAGS);
-         this->dtcParams = new double[XSP3_NUM_DTC_FLOAT_PARAMS * params.Size()];
-         this->dtcFlags = new int[flags.Size()];
-         if (flags.Size() != params.Size()) {
-             LOG4CXX_ERROR(logger_, "DTC setting dimension mismatch");
-             return;
-         }
+  // Check to see if we are configuring the process number and rank
+  if (config.has_param(XspressProcessPlugin::CONFIG_PROCESS)) {
+    OdinData::IpcMessage processConfig(config.get_param<const rapidjson::Value&>(XspressProcessPlugin::CONFIG_PROCESS));
+    this->configureProcess(processConfig, reply);
+  }
 
-         size_t numChannels = flags.Size();
-         for (size_t i = 0; i < numChannels; i++) {
-             const rapidjson::Value& flag = flags[i];
-             const rapidjson::Value& chanParams = params[i];
-             this->dtcFlags[i] = flag.GetUint64();
-             if (chanParams.Size() != XSP3_NUM_DTC_FLOAT_PARAMS) {
-                 LOG4CXX_ERROR(logger_, "DTC setting dimension mismatch");
-                 return;
-             }
-             for (rapidjson::SizeType j = 0; j < XSP3_NUM_DTC_FLOAT_PARAMS; j++) {
-                 const rapidjson::Value& param = chanParams[j];
-                 this->dtcParams[i * XSP3_NUM_DTC_FLOAT_PARAMS + j] = param.GetDouble();
-             }
-         }
-*/
+  // Check for the acquisition ID
+  if (config.has_param(XspressProcessPlugin::CONFIG_ACQ_ID)) {
+    this->acq_id_ = config.get_param<std::string>(XspressProcessPlugin::CONFIG_ACQ_ID);
+    LOG4CXX_INFO(logger_, "Acquisition ID set to " << this->acq_id_);
+  }
+}
+
+void XspressProcessPlugin::requestConfiguration(OdinData::IpcMessage& reply)
+{
+  // Return the configuration of the LATRD process plugin
+  reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_FRAMES, this->num_frames_);
+  reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_PROCESS + "/" +
+                  XspressProcessPlugin::CONFIG_PROCESS_NUMBER, this->concurrent_processes_);
+  reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_PROCESS + "/" +
+                  XspressProcessPlugin::CONFIG_PROCESS_RANK, this->concurrent_rank_);
+  reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_ACQ_ID, this->acq_id_);
+}
+
+/**
+ * Set configuration options for the Xspress process count.
+ *
+ * This sets up the process plugin according to the configuration IpcMessage
+ * objects that are received. The options are searched for:
+ * CONFIG_PROCESS_NUMBER - Sets the number of writer processes executing
+ * CONFIG_PROCESS_RANK - Sets the rank of this process
+ *
+ * \param[in] config - IpcMessage containing configuration data.
+ * \param[out] reply - Response IpcMessage.
+ */
+void XspressProcessPlugin::configureProcess(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
+{
+  // Check for process number and rank number
+  if (config.has_param(XspressProcessPlugin::CONFIG_PROCESS_NUMBER)) {
+    this->concurrent_processes_ = config.get_param<size_t>(XspressProcessPlugin::CONFIG_PROCESS_NUMBER);
+    LOG4CXX_INFO(logger_, "Concurrent processes changed to " << this->concurrent_processes_);
+  }
+  if (config.has_param(XspressProcessPlugin::CONFIG_PROCESS_RANK)) {
+    this->concurrent_rank_ = config.get_param<size_t>(XspressProcessPlugin::CONFIG_PROCESS_RANK);
+    LOG4CXX_INFO(logger_, "Process rank changed to " << this->concurrent_rank_);
+  }
 }
 
 // Version functions
@@ -268,6 +297,45 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
 //  }
 
 
+            rapidjson::Document meta_document;
+            meta_document.SetObject();
+
+            // Add Acquisition ID
+            rapidjson::Value key_acq_id("acqID", meta_document.GetAllocator());
+            rapidjson::Value value_acq_id;
+            value_acq_id.SetString(acq_id_.c_str(), acq_id_.size(), meta_document.GetAllocator());
+            meta_document.AddMember(key_acq_id, value_acq_id, meta_document.GetAllocator());
+            // Add rank
+            rapidjson::Value key_rank("rank", meta_document.GetAllocator());
+            rapidjson::Value value_rank;
+            value_rank.SetInt(concurrent_rank_);
+            meta_document.AddMember(key_rank, value_rank, meta_document.GetAllocator());
+            // Add number of data points
+            rapidjson::Value key_qty("qty_scalars", meta_document.GetAllocator());
+            rapidjson::Value value_qty;
+            value_qty.SetInt(num_scalar_values);
+            meta_document.AddMember(key_qty, value_qty, meta_document.GetAllocator());
+            // Add ts index
+            rapidjson::Value key_index("channel_index", meta_document.GetAllocator());
+            rapidjson::Value value_index;
+            value_index.SetInt(first_channel_index);
+            meta_document.AddMember(key_index, value_index, meta_document.GetAllocator());
+
+            rapidjson::StringBuffer buffer;
+            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+            meta_document.Accept(writer);
+
+            LOG4CXX_INFO(logger_, "Publishing MCA scalars: " << buffer.GetString());
+            this->publish_meta("xspress",
+                               "xspress_scalars",
+                               sca_ptr,
+                               num_scalar_values * sizeof(uint32_t),
+                               buffer.GetString());
+
+
+
+
+
   char *mca_ptr = frame_bytes;
   mca_ptr += (sizeof(FrameHeader) + 
              (num_scalar_values*sizeof(uint32_t)) + 
@@ -290,7 +358,10 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
         mca_dims.push_back(header->num_energy_bins);
         std::stringstream ss;
         ss << "mca_" << index + first_channel_index;
-        FrameMetaData mca_metadata((frame_id / frames_per_block_), ss.str(), raw_32bit, "", mca_dims);
+        // Calculate the ID of the frame we need to push
+        // This must be offset according to the rank and number of processes
+        uint32_t push_frame_id = ((frame_id / frames_per_block_) * concurrent_processes_) + concurrent_rank_;
+        FrameMetaData mca_metadata(push_frame_id, ss.str(), raw_32bit, "", mca_dims);
         boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->size()));
         memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->size());
         // Set the chunking size
@@ -307,7 +378,10 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
         mca_dims.push_back(header->num_energy_bins);
         std::stringstream ss;
         ss << "mca_" << index + first_channel_index;
-        FrameMetaData mca_metadata((frame_id / frames_per_block_), ss.str(), raw_32bit, "", mca_dims);
+        // Calculate the ID of the frame we need to push
+        // This must be offset according to the rank and number of processes
+        uint32_t push_frame_id = ((frame_id / frames_per_block_) * concurrent_processes_) + concurrent_rank_;
+        FrameMetaData mca_metadata(push_frame_id, ss.str(), raw_32bit, "", mca_dims);
         boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->current_byte_size()));
         memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->current_byte_size());
         // Set the chunking size

@@ -119,12 +119,25 @@ public:
                         std::vector<float>& t5);
   int read_dropped_frames(std::vector<int32_t>& dropped_frames);
   int read_dtc_params(int max_channels,
-                      std::vector<int>& dtci,
-                      std::vector<double>& dtcd,
-                      bool& parameters_updated);
+                      std::vector<int>& dtc_flags,
+                      std::vector<double>& dtc_all_event_off,
+                      std::vector<double>& dtc_all_event_grad,
+                      std::vector<double>& dtc_all_event_rate_off,
+                      std::vector<double>& dtc_all_event_rate_grad,
+                      std::vector<double>& dtc_in_window_off,
+                      std::vector<double>& dtc_in_window_grad,
+                      std::vector<double>& dtc_in_window_rate_off,
+                      std::vector<double>& dtc_in_window_rate_grad);
   int write_dtc_params(int max_channels,
-                       std::vector<int>& dtci,
-                       std::vector<double>& dtcd);
+                       std::vector<int>& dtc_flags,
+                       std::vector<double>& dtc_all_event_off,
+                       std::vector<double>& dtc_all_event_grad,
+                       std::vector<double>& dtc_all_event_rate_off,
+                       std::vector<double>& dtc_all_event_rate_grad,
+                       std::vector<double>& dtc_in_window_off,
+                       std::vector<double>& dtc_in_window_grad,
+                       std::vector<double>& dtc_in_window_rate_off,
+                       std::vector<double>& dtc_in_window_rate_grad);
   int mapTimeFrameSource(Xsp3Timing *api_mode,
                          int *api_itfg_mode,
                          int trigger_mode,
@@ -174,6 +187,8 @@ public:
                               uint32_t start_chan,
                               uint32_t num_chan,
                               uint32_t *buffer_length);
+  int set_window(int chan, int sca, int llm, int hlm);
+  int set_sca_thresh(int chan, int value);
 
   static const int runFlag_MCA_SPECTRA_;
   static const int runFlag_SCALERS_ONLY_;
