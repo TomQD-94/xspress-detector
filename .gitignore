@@ -10,3 +10,5 @@ build-dir/
 cmake-build-debug/
 */CMakeFiles/*
 
+node_modules
+test
