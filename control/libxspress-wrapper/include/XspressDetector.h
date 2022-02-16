@@ -27,6 +27,10 @@ using namespace log4cxx::helpers;
 #define XSP_MODE_MCA "mca"
 #define XSP_MODE_LIST "list"
 
+#define XSP_SCA5_LIM 0
+#define XSP_SCA6_LIM 1
+
+
 namespace Xspress
 {
 
@@ -106,6 +110,26 @@ public:
   std::string getXspMode();
   void setXspDAQEndpoints(std::vector<std::string> endpoints);
   std::vector<std::string> getXspDAQEndpoints();
+  int setSca5LowLimits(std::vector<uint32_t> sca5_low_limit);
+  std::vector<uint32_t> getSca5LowLimits();
+  int setSca5HighLimits(std::vector<uint32_t> sca5_high_limit);
+  std::vector<uint32_t> getSca5HighLimits();
+  int setSca6LowLimits(std::vector<uint32_t> sca6_low_limit);
+  std::vector<uint32_t> getSca6LowLimits();
+  int setSca6HighLimits(std::vector<uint32_t> sca6_high_limit);
+  std::vector<uint32_t> getSca6HighLimits();
+  int setSca4Thresholds(std::vector<uint32_t> sca4_thresholds);
+  std::vector<uint32_t> getSca4Thresholds();
+  std::vector<int> getDtcFlags();
+  std::vector<double> getDtcAllEventOff();
+  std::vector<double> getDtcAllEventGrad();
+  std::vector<double> getDtcAllEventRateOff();
+  std::vector<double> getDtcAllEventRateGrad();
+  std::vector<double> getDtcInWindowOff();
+  std::vector<double> getDtcInWindowGrad();
+  std::vector<double> getDtcInWindowRateOff();
+  std::vector<double> getDtcInWindowRateGrad();
+
   
 private:
   /** libxspress wrapper object */
@@ -190,9 +214,17 @@ private:
   std::vector<uint32_t>         xsp_chan_sca4_threshold_;
 
 
-  std::vector<int>              pDTCi_;
-  std::vector<double>           pDTCd_;
-  
+  /** Dead time correction parameters */
+  std::vector<int>              xsp_dtc_flags_;
+  std::vector<double>           xsp_dtc_all_event_off_;
+  std::vector<double>           xsp_dtc_all_event_grad_;
+  std::vector<double>           xsp_dtc_all_event_rate_off_;
+  std::vector<double>           xsp_dtc_all_event_rate_grad_;
+  std::vector<double>           xsp_dtc_in_window_off_;
+  std::vector<double>           xsp_dtc_in_window_grad_;
+  std::vector<double>           xsp_dtc_in_window_rate_off_;
+  std::vector<double>           xsp_dtc_in_window_rate_grad_;
+
   std::vector<std::pair <int, int> > cardChanMap;
 
   /** Pointer to the logging facility */

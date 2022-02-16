@@ -398,7 +398,16 @@ void XspressDetector::readFemStatus()
  */
 int XspressDetector::readDTCParams()
 {
-  return detector_.read_dtc_params(xsp_max_channels_, pDTCi_, pDTCd_, xsp_dtc_params_updated_);
+  return detector_.read_dtc_params(xsp_max_channels_,
+                                   xsp_dtc_flags_,
+                                   xsp_dtc_all_event_off_,
+                                   xsp_dtc_all_event_grad_,
+                                   xsp_dtc_all_event_rate_off_,
+                                   xsp_dtc_all_event_rate_grad_,
+                                   xsp_dtc_in_window_off_,
+                                   xsp_dtc_in_window_grad_,
+                                   xsp_dtc_in_window_rate_off_,
+                                   xsp_dtc_in_window_rate_grad_);
 }
 
 /**
@@ -406,7 +415,16 @@ int XspressDetector::readDTCParams()
  */
 int XspressDetector::writeDTCParams()
 {
-  return detector_.write_dtc_params(xsp_max_channels_, pDTCi_, pDTCd_);
+  return detector_.write_dtc_params(xsp_max_channels_,
+                                    xsp_dtc_flags_,
+                                    xsp_dtc_all_event_off_,
+                                    xsp_dtc_all_event_grad_,
+                                    xsp_dtc_all_event_rate_off_,
+                                    xsp_dtc_all_event_rate_grad_,
+                                    xsp_dtc_in_window_off_,
+                                    xsp_dtc_in_window_grad_,
+                                    xsp_dtc_in_window_rate_off_,
+                                    xsp_dtc_in_window_rate_grad_);
 }
 
 int XspressDetector::setTriggerMode()
@@ -558,12 +576,6 @@ void XspressDetector::setXspMaxChannels(int max_channels)
   // Re initialise the frames read vector based on the maximum channels
   xsp_status_frames_.clear();
   xsp_status_frames_.resize(xsp_max_channels_);
-
-  // Re initialise the DTC vectors based on the maximum channels
-  pDTCi_.clear();
-  pDTCi_.resize(XSP3_NUM_DTC_INT_PARAMS * xsp_max_channels_);
-  pDTCd_.clear();
-  pDTCd_.resize(XSP3_NUM_DTC_FLOAT_PARAMS * xsp_max_channels_);
 }
 
 int XspressDetector::getXspMaxChannels()
@@ -719,6 +731,221 @@ void XspressDetector::setXspDAQEndpoints(std::vector<std::string> endpoints)
 std::vector<std::string> XspressDetector::getXspDAQEndpoints()
 {
   return xsp_daq_endpoints_;
+}
+
+int XspressDetector::setSca5LowLimits(std::vector<uint32_t> sca5_low_limit)
+{
+  int status = XSP_STATUS_OK;
+  // Verify we are connected
+  if (checkConnected()){
+    // Verify we have been passed the correct size vector
+    if (sca5_low_limit.size() == xsp_chan_sca5_low_lim_.size()){
+      // Loop over the values calling the appropriate set window
+      for (int chan = 0; chan < sca5_low_limit.size(); chan++){
+        status != detector_.set_window(chan, XSP_SCA5_LIM, sca5_low_limit[chan], xsp_chan_sca5_high_lim_[chan]);
+      }
+      // Once updated read back the limits from the detector
+      if (status == XSP_STATUS_OK){
+        status = this->readSCAParams();
+      }
+    } else {
+      std::stringstream ss;
+      ss << "Cannot set scalar 5 low limits, input array dimension " << sca5_low_limit.size() <<
+            " current array dimension " << xsp_chan_sca5_low_lim_.size();
+      setErrorString(ss.str());
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    setErrorString("Cannot set scalar 5 low limits, not connected");
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+std::vector<uint32_t> XspressDetector::getSca5LowLimits()
+{
+  return xsp_chan_sca5_low_lim_;
+}
+
+int XspressDetector::setSca5HighLimits(std::vector<uint32_t> sca5_high_limit)
+{
+  int status = XSP_STATUS_OK;
+  // Verify we are connected
+  if (checkConnected()){
+    // Verify we have been passed the correct size vector
+    if (sca5_high_limit.size() == xsp_chan_sca5_high_lim_.size()){
+      // Loop over the values calling the appropriate set window
+      for (int chan = 0; chan < sca5_high_limit.size(); chan++){
+        status != detector_.set_window(chan, XSP_SCA5_LIM, xsp_chan_sca5_low_lim_[chan], sca5_high_limit[chan]);
+      }
+      // Once updated read back the limits from the detector
+      if (status == XSP_STATUS_OK){
+        status = this->readSCAParams();
+      }
+    } else {
+      std::stringstream ss;
+      ss << "Cannot set scalar 5 high limits, input array dimension " << sca5_high_limit.size() <<
+            " current array dimension " << xsp_chan_sca5_high_lim_.size();
+      setErrorString(ss.str());
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    setErrorString("Cannot set scalar 5 high limits, not connected");
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+std::vector<uint32_t> XspressDetector::getSca5HighLimits()
+{
+  return xsp_chan_sca5_high_lim_;
+}
+
+int XspressDetector::setSca6LowLimits(std::vector<uint32_t> sca6_low_limit)
+{
+  int status = XSP_STATUS_OK;
+  // Verify we are connected
+  if (checkConnected()){
+    // Verify we have been passed the correct size vector
+    if (sca6_low_limit.size() == xsp_chan_sca6_low_lim_.size()){
+      // Loop over the values calling the appropriate set window
+      for (int chan = 0; chan < sca6_low_limit.size(); chan++){
+        status != detector_.set_window(chan, XSP_SCA6_LIM, sca6_low_limit[chan], xsp_chan_sca6_high_lim_[chan]);
+      }
+      // Once updated read back the limits from the detector
+      if (status == XSP_STATUS_OK){
+        status = this->readSCAParams();
+      }
+    } else {
+      std::stringstream ss;
+      ss << "Cannot set scalar 6 low limits, input array dimension " << sca6_low_limit.size() <<
+            " current array dimension " << xsp_chan_sca6_low_lim_.size();
+      setErrorString(ss.str());
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    setErrorString("Cannot set scalar 6 low limits, not connected");
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+std::vector<uint32_t> XspressDetector::getSca6LowLimits()
+{
+  return xsp_chan_sca6_low_lim_;
+}
+
+int XspressDetector::setSca6HighLimits(std::vector<uint32_t> sca6_high_limit)
+{
+  int status = XSP_STATUS_OK;
+  // Verify we are connected
+  if (checkConnected()){
+    // Verify we have been passed the correct size vector
+    if (sca6_high_limit.size() == xsp_chan_sca6_high_lim_.size()){
+      // Loop over the values calling the appropriate set window
+      for (int chan = 0; chan < sca6_high_limit.size(); chan++){
+        status != detector_.set_window(chan, XSP_SCA6_LIM, xsp_chan_sca6_low_lim_[chan], sca6_high_limit[chan]);
+      }
+      // Once updated read back the limits from the detector
+      if (status == XSP_STATUS_OK){
+        status = this->readSCAParams();
+      }
+    } else {
+      std::stringstream ss;
+      ss << "Cannot set scalar 6 high limits, input array dimension " << sca6_high_limit.size() <<
+            " current array dimension " << xsp_chan_sca6_high_lim_.size();
+      setErrorString(ss.str());
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    setErrorString("Cannot set scalar 6 high limits, not connected");
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+std::vector<uint32_t> XspressDetector::getSca6HighLimits()
+{
+  return xsp_chan_sca6_high_lim_;
+}
+
+int XspressDetector::setSca4Thresholds(std::vector<uint32_t> sca4_thresholds)
+{
+  int status = XSP_STATUS_OK;
+  // Verify we are connected
+  if (checkConnected()){
+    // Verify we have been passed the correct size vector
+    if (sca4_thresholds.size() == xsp_chan_sca4_threshold_.size()){
+      // Loop over the values calling the appropriate set window
+      for (int chan = 0; chan < sca4_thresholds.size(); chan++){
+        status != detector_.set_sca_thresh(chan, sca4_thresholds[chan]);
+      }
+      // Once updated read back the limits from the detector
+      if (status == XSP_STATUS_OK){
+        status = this->readSCAParams();
+      }
+    } else {
+      std::stringstream ss;
+      ss << "Cannot set scalar 4 thresholds, input array dimension " << sca4_thresholds.size() <<
+            " current array dimension " << xsp_chan_sca4_threshold_.size();
+      setErrorString(ss.str());
+      status = XSP_STATUS_ERROR;
+    }
+  } else {
+    setErrorString("Cannot set scalar 4 thresholds, not connected");
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+std::vector<uint32_t> XspressDetector::getSca4Thresholds()
+{
+  return xsp_chan_sca4_threshold_;
+}
+
+std::vector<int> XspressDetector::getDtcFlags()
+{
+ return xsp_dtc_flags_;
+}
+
+std::vector<double> XspressDetector::getDtcAllEventOff()
+{
+  return xsp_dtc_all_event_off_;
+}
+
+std::vector<double> XspressDetector::getDtcAllEventGrad()
+{
+  return xsp_dtc_all_event_grad_;
+}
+
+std::vector<double> XspressDetector::getDtcAllEventRateOff()
+{
+  return xsp_dtc_all_event_rate_off_;
+}
+
+std::vector<double> XspressDetector::getDtcAllEventRateGrad()
+{
+  return xsp_dtc_all_event_rate_grad_;
+}
+
+std::vector<double> XspressDetector::getDtcInWindowOff()
+{
+  return xsp_dtc_in_window_off_;
+}
+
+std::vector<double> XspressDetector::getDtcInWindowGrad()
+{
+  return xsp_dtc_in_window_grad_;
+}
+
+std::vector<double> XspressDetector::getDtcInWindowRateOff()
+{
+  return xsp_dtc_in_window_rate_off_;
+}
+
+std::vector<double> XspressDetector::getDtcInWindowRateGrad()
+{
+  return xsp_dtc_in_window_rate_grad_;
 }
 
 } /* namespace Xspress */
