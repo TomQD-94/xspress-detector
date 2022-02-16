@@ -5,7 +5,6 @@ from enum import Enum
 from functools import partial
 from datetime import datetime
 
-from odin_data.ipc_client import IpcClient
 from odin_data.ipc_message import IpcMessage
 from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
@@ -23,13 +22,19 @@ class AuotoPeriodicCallback(object):
     Automatically start and stop the periodic callbacks based on the value of another callback (predicate).
     In order to start/stop the main callback in time, the predicate will be checked at time/2.
     """
-    def __init__(self, callback, predicate, time_seconds):
+    def __init__(self, callback, predicate, time_seconds, time_min=0.01):
+        self.time_min = time_min
+        self.check_time_valid(time_seconds)
         self.callback = callback
         self.predicate = predicate
         callback_time = time_seconds*1000
         predicate_time = callback_time/2.0
         self.callback_sched = PeriodicCallback(self.callback, callback_time)
         self.predicate_sched = PeriodicCallback(self._auto_callback, predicate_time)
+
+    def check_time_valid(self, time):
+        if time < self.time_min:
+            raise ValueError("Time provided is smaller than limit")
 
     def _auto_callback(self):
         if self.callback_sched.is_running() and not self.predicate():
@@ -48,6 +53,7 @@ class AuotoPeriodicCallback(object):
         return self.predicate_sched.is_running()
 
     def set_time(self, time_seconds: float):
+        self.check_time_valid(time_seconds)
         time = time_seconds*1000
         self.callback_sched.callback_time = time
         self.predicate_sched.callback_time = time/2.0
@@ -61,6 +67,7 @@ class MessageType(Enum):
     CONFIG_XSP = 2
     REQUEST = 3
     CONFIG_ROOT = 4
+    CONFIG_APP = 5
 
 class XspressTriggerMode:
     TM_SOFTWARE            = 0
@@ -92,9 +99,10 @@ class XspressDetectorStr:
     CONFIG_ADAPTER_CONNECTED     = "connected"
     CONFIG_ADAPTER_USERNAME      = "username"
 
-    CONFIG_SHUTDOWN              = "shutdown"
-    CONFIG_DEBUG                 = "debug_level"
-    CONFIG_CTRL_ENDPOINT         = "ctrl_endpoint"
+    CONFIG_APP                   = "app"
+    CONFIG_APP_SHUTDOWN          = "shutdow"
+    CONFIG_APP_DEBUG             = "debug_level"
+    CONFIG_APP_CTRL_ENDPOINT     = "ctrl_endpoint"
     CONFIG_REQUEST               = "request_configuration"
 
     CONFIG_XSP                   = "config"
@@ -114,7 +122,6 @@ class XspressDetectorStr:
     CONFIG_XSP_INVERT_VETO       = "invert_veto"
     CONFIG_XSP_DEBOUNCE          = "debounce"
     CONFIG_XSP_EXPOSURE_TIME     = "exposure_time"
-    CONFIG_XSP_FRAMES            = "frames"     # should be merged in Application level
     CONFIG_XSP_NUM_IMAGES        = "num_images" # so only "num_images" is used
 
     CONFIG_DAQ                   = "daq"
@@ -123,11 +130,13 @@ class XspressDetectorStr:
 
     CONFIG_CMD                   = "cmd"
     CONFIG_CMD_CONNECT           = "connect"
+    CONFIG_CMD_DISCONNECT        = "disconnect"
     CONFIG_CMD_SAVE              = "save"
     CONFIG_CMD_RESTORE           = "restore"
     CONFIG_CMD_START             = "start"
     CONFIG_CMD_STOP              = "stop"
     CONFIG_CMD_TRIGGER           = "trigger"
+    CONFIG_CMD_ACQUIRE           = "acquire"
 
 
 class XspressDetectorException(Exception):
@@ -143,10 +152,8 @@ class XspressDetector(object):
         self.start_time = datetime.now()
         self.username = getpass.getuser()
 
-        self._sync_client = IpcClient(ip, port) # calls zmq_sock.connect() so might throw?
         self._async_client = XspressClient(ip, port, callback=self.on_recv_callback)
         self.timeout = 1
-        self.ctrl_enpoint_connected: bool = False
         self.xsp_connected: bool = False
         self.sched = AuotoPeriodicCallback(self.read_config, self._async_client.is_connected, UPDATE_PARAMS_PERIOD_SECONDS)
 
@@ -166,30 +173,34 @@ class XspressDetector(object):
         self.use_resgrades : bool = False
         self.run_flags : int = 0
         self.dtc_energy : float = 0.0
-        self.trigger_mode : str = ""
-        self.num_frames : int = 0
+        self.trigger_mode : int = 0
         self.invert_f0 : int = 0
         self.invert_veto : int = 0
         self.debounce : int = 0
         self.exposure_time : float = 0.0
-        self.frames : int = 0
+        self.num_images : int = 0
 
         # daq parameter tree members
         self.daq_enabled : bool = False
         self.daq_endpoints : list[str] = []
 
         # cmd parameter tree members. No state to store.
-        # connect, save, restore, start, stop, trigger
+        # connect, disconnect, save, restore, start, stop, trigger
 
         tree = \
         {
-            XspressDetectorStr.CONFIG_DEBUG :                     (lambda: self.ctr_debug, partial(self._set, 'ctr_debug'), {}),
-            XspressDetectorStr.CONFIG_CTRL_ENDPOINT:              (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
+            
+            XspressDetectorStr.CONFIG_APP :
+            {
+
+                XspressDetectorStr.CONFIG_APP_DEBUG :             (lambda: self.ctr_debug, partial(self._set, 'ctr_debug'), {}),
+                XspressDetectorStr.CONFIG_APP_CTRL_ENDPOINT:      (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
+            },
 
             XspressDetectorStr.CONFIG_ADAPTER : {
                 XspressDetectorStr.CONFIG_ADAPTER_START_TIME:     (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
                 XspressDetectorStr.CONFIG_ADAPTER_UP_TIME:        (lambda: str(datetime.now() - self.start_time), {}),
-                XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (lambda: self._async_client.is_connected(), {}),
+                XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (self._async_client.is_connected, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_USERNAME:       (lambda: self.username, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_SCAN:           (self.sched.get_time, {}),
             },
@@ -222,15 +233,19 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_XSP_INVERT_VETO :       (lambda: self.invert_veto, partial(self._set, "invert_veto"), {}),
                 XspressDetectorStr.CONFIG_XSP_DEBOUNCE :          (lambda: self.debounce, partial(self._set, "debounce"), {}),
                 XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME :     (lambda: self.exposure_time, partial(self._set, "exposure_time"), {}),
-                XspressDetectorStr.CONFIG_XSP_FRAMES :            (lambda: self.frames, partial(self._set, "frames"), {}),
-                XspressDetectorStr.CONFIG_XSP_NUM_IMAGES :        (lambda: self.frames, {}),
+                XspressDetectorStr.CONFIG_XSP_NUM_IMAGES :        (lambda: self.num_images, partial(self._set, "num_images"), {}),
             }
         }
         self.parameter_tree = ParameterTree(tree)
         put_tree = \
         {
-            XspressDetectorStr.CONFIG_DEBUG : (None, partial(self._put, MessageType.CONFIG_ROOT, XspressDetectorStr.CONFIG_DEBUG), {}),
-            XspressDetectorStr.CONFIG_CTRL_ENDPOINT: (None, partial(self._put, MessageType.CONFIG_ROOT, XspressDetectorStr.CONFIG_CTRL_ENDPOINT), {}),
+            XspressDetectorStr.CONFIG_APP :
+            {
+                XspressDetectorStr.CONFIG_APP_DEBUG : (None, partial(self._put, MessageType.CONFIG_APP, XspressDetectorStr.CONFIG_APP_DEBUG), {}),
+                XspressDetectorStr.CONFIG_APP_CTRL_ENDPOINT: (None, partial(self._put, MessageType.CONFIG_APP, XspressDetectorStr.CONFIG_APP_CTRL_ENDPOINT), {}),
+                XspressDetectorStr.CONFIG_APP_SHUTDOWN: (None, partial(self._put, MessageType.CONFIG_APP, XspressDetectorStr.CONFIG_APP_SHUTDOWN), {}),
+            },
+
             XspressDetectorStr.CONFIG_REQUEST: (None, self.read_config, {}),
             XspressDetectorStr.CONFIG_ADAPTER :
             {
@@ -257,19 +272,27 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_XSP_DEBOUNCE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_DEBOUNCE), {}),
                 XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE), {}),
                 XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME), {}),
-                XspressDetectorStr.CONFIG_XSP_NUM_IMAGES : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_FRAMES), {}),
+                XspressDetectorStr.CONFIG_XSP_NUM_IMAGES : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_NUM_IMAGES), {}),
             },
             XspressDetectorStr.CONFIG_CMD :
             {
                 XspressDetectorStr.CONFIG_CMD_CONNECT : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT)),
+                XspressDetectorStr.CONFIG_CMD_DISCONNECT : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_DISCONNECT)),
                 XspressDetectorStr.CONFIG_CMD_SAVE : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_SAVE)),
                 XspressDetectorStr.CONFIG_CMD_RESTORE : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_RESTORE)),
                 XspressDetectorStr.CONFIG_CMD_START : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START)),
                 XspressDetectorStr.CONFIG_CMD_STOP : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_STOP)),
                 XspressDetectorStr.CONFIG_CMD_TRIGGER : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_TRIGGER)),
+                XspressDetectorStr.CONFIG_CMD_ACQUIRE : (None, self.acquire)
             }
         }
         self.put_parameter_tree = ParameterTree(put_tree)
+
+    def acquire(self, value):
+        if value:
+            self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START, 1)
+        else:
+            self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_STOP, 1)
 
     def do_updates(self, value: int):
         if value:
@@ -391,6 +414,8 @@ class XspressDetector(object):
         if message_type == MessageType.REQUEST:
             msg = IpcMessage(XspressDetectorStr.CONFIG_CMD, XspressDetectorStr.CONFIG_REQUEST)
             return msg
+        elif message_type == MessageType.CONFIG_APP:
+            params_group = XspressDetectorStr.CONFIG_APP
         elif message_type == MessageType.CONFIG_XSP:
             params_group = XspressDetectorStr.CONFIG_XSP
         elif message_type == MessageType.CMD:
