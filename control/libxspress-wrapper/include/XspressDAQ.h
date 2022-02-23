@@ -65,6 +65,8 @@ public:
   boost::shared_ptr<XspressDAQTask> create_task(uint32_t type, uint32_t value1);
   boost::shared_ptr<XspressDAQTask> create_task(uint32_t type, uint32_t value1, uint32_t value2);
   void startAcquisition(uint32_t frames);
+  bool getAcqRunning();
+  uint32_t getFramesRead();
   void controlTask();
   void workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > queue,
                 int index,
@@ -102,7 +104,10 @@ private:
 
   /** Buffer length value */
   uint32_t                      buffer_length_;
-
+  /** Is the DAQ thread running an acquisition */
+  bool acq_running_;
+  /** Number of frames read out of shared memory in current acquisition */
+  uint32_t no_of_frames_;
 };
 
 } /* namespace Xspress */

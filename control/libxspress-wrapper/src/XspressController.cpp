@@ -67,8 +67,12 @@ const std::string XspressController::CONFIG_CMD_START                 = "start";
 const std::string XspressController::CONFIG_CMD_STOP                  = "stop";
 const std::string XspressController::CONFIG_CMD_TRIGGER               = "trigger";
 
-const std::string XspressController::CONFIG_XSP_MODE_MCA          = XSP_MODE_MCA;
-const std::string XspressController::CONFIG_XSP_MODE_LIST         = XSP_MODE_LIST;
+const std::string XspressController::CONFIG_XSP_MODE_MCA              = XSP_MODE_MCA;
+const std::string XspressController::CONFIG_XSP_MODE_LIST             = XSP_MODE_LIST;
+
+
+const std::string XspressController::STATUS_ACQ_COMPLETE              = "acquisition_complete";
+const std::string XspressController::STATUS_FRAMES                    = "frames_acquired";
 
 
 /** Construct a new XspressController class.
@@ -209,12 +213,10 @@ void XspressController::handleCtrlChannel()
  */
 void XspressController::provideStatus(OdinData::IpcMessage& reply)
 {
-
-    std::vector<uint32_t> sca5ll = xsp_.getSca5LowLimits();
-  for (int index = 0; index < sca5ll.size(); index++){
-    reply.set_param(XspressController::CONFIG_XSP + "/" +
-                    XspressController::CONFIG_XSP_SCA5_LOW + "[]", sca5ll[index]);
-  }
+  // Clients expect the acq complete status, which is the inverse of the acquiring method
+  reply.set_param(XspressController::STATUS_ACQ_COMPLETE, !xsp_.getXspAcquiring());
+  // Number of frames read for current acquisition
+  reply.set_param(XspressController::STATUS_FRAMES, xsp_.getXspFramesRead());
 
 }
 
