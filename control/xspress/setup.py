@@ -12,34 +12,7 @@ from _version_git import __version__, get_cmdclass  # noqa
 
 
 setup(
-
-    name="xspress-odin",
     cmdclass=get_cmdclass(),
     version=__version__,
-    python_requires=">=3.6",
-    package_dir={"": "src"},
-    packages=find_packages(where="src"),
-    include_package_data=True,
-    install_requires=[
-        # "odin-data",
-        # "odin-control",
-        "pyzmq==22.3.0",
-        "tornado==6.1",
-    ],
-    entry_points={
-        'console_scripts': [
-            'xspress_odin  = xspress_odin.server:main',
-        ]
-    },
-    # metadata to display on PyPI
-    author="Omar Elamin",
-    author_email="omar.elamin@diamond.ac.uk",
-    description="Odin Server for Xspress 4 detector",
-    classifiers=[
-        "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-    ],
 )
 
