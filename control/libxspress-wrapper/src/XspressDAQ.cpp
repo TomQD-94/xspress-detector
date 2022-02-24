@@ -28,6 +28,8 @@ XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr,
                        uint32_t num_channels,
                        uint32_t num_spectra,
                        std::vector<std::string> endpoints):
+    acq_running_(false),
+    no_of_frames_(0),
     logger_(log4cxx::Logger::getLogger("Xspress.XspressDAQ"))
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
@@ -119,8 +121,22 @@ boost::shared_ptr<XspressDAQTask> XspressDAQ::create_task(uint32_t type, uint32_
 
 void XspressDAQ::startAcquisition(uint32_t frames)
 {
+  // Set the acquisition running flag to true
+  acq_running_ = true;
+  // Set the number of frames read out to 0
+  no_of_frames_ = 0;
   // Load the start task into the ctrl queue
   ctrl_queue_->add(create_task(DAQ_TASK_TYPE_START, frames), true);
+}
+
+bool XspressDAQ::getAcqRunning()
+{
+  return acq_running_;
+}
+
+uint32_t XspressDAQ::getFramesRead()
+{
+  return no_of_frames_;
 }
 
 void XspressDAQ::controlTask()
@@ -145,8 +161,7 @@ void XspressDAQ::controlTask()
 
       int32_t num_frames = 0;
       int32_t frames_read = 0;
-      bool acq_running = true;
-      while ((num_frames < total_frames) && acq_running){
+      while ((num_frames < total_frames) && acq_running_){
         int status = detector_->get_num_frames_read(&num_frames);
         if (status == XSP_STATUS_OK){
           uint32_t frames_to_read = num_frames - frames_read;
@@ -168,13 +183,14 @@ void XspressDAQ::controlTask()
             LOG4CXX_DEBUG_LEVEL(4, logger_, "Worker threads completed and circular buffer acknowledgement sent");
             // Set frames read to correct value
             frames_read = num_frames;
+            no_of_frames_ = num_frames;
           } else {
               // We need to wait for some frames
               sleep(0.001);
           }
         } else {
           LOG4CXX_ERROR(logger_, "Error: " << "INSERT MSG" << " Aborting acquisition");
-          acq_running = false;
+          acq_running_ = false;
           // Abort the acquisition
           detector_->histogram_stop(0);
           //detector_->histogram_stop(1);
@@ -183,6 +199,8 @@ void XspressDAQ::controlTask()
         }
       }
       LOG4CXX_INFO(logger_, "DAQ thread completed, read " << frames_read << " frames");
+      // Reset the acquisition running flag to false
+      acq_running_ = false;
     }
     if (task->type_ == DAQ_TASK_TYPE_SHUTDOWN){
       // Signal shutdown to all of the worker threads

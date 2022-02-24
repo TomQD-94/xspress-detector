@@ -948,4 +948,32 @@ std::vector<double> XspressDetector::getDtcInWindowRateGrad()
   return xsp_dtc_in_window_rate_grad_;
 }
 
+bool XspressDetector::getXspAcquiring()
+{
+  // This method has two jobs.  The first is to check
+  // the DAQ status of acquiring if we are in MCA mode
+  // because our class acquiring flag is latched and can
+  // only be reset once we know that the DAQ has completed.
+  if (acquiring_){
+    if (daq_){
+      // Check the DAQ flag.  If it is false then reset our flag
+      if (!daq_->getAcqRunning()){
+        acquiring_ = false;
+      }
+    }
+  }
+  // The second job is to return the acquiring state
+  return acquiring_;
+}
+
+uint32_t XspressDetector::getXspFramesRead()
+{
+  uint32_t frames = 0;
+  // If DAQ exists return the counter from that object.
+  if (daq_){
+    frames = daq_->getFramesRead();
+  }
+  return frames;
+}
+
 } /* namespace Xspress */

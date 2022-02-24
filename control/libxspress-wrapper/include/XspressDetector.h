@@ -129,7 +129,8 @@ public:
   std::vector<double> getDtcInWindowGrad();
   std::vector<double> getDtcInWindowRateOff();
   std::vector<double> getDtcInWindowRateGrad();
-
+  bool getXspAcquiring();
+  uint32_t getXspFramesRead();
   
 private:
   /** libxspress wrapper object */

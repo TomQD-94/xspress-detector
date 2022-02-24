@@ -354,7 +354,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
         // Create the frame and push it
         dimensions_t mca_dims;
 //        mca_dims.push_back(frames_per_block_);
-//        mca_dims.push_back(header->num_aux);
+        mca_dims.push_back(header->num_aux);
         mca_dims.push_back(header->num_energy_bins);
         std::stringstream ss;
         ss << "mca_" << index + first_channel_index;
@@ -375,6 +375,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
       if (frame_id == (num_frames_-1)){
         LOG4CXX_INFO(logger_, "num_frames_ - 1: " << (num_frames_-1));
         dimensions_t mca_dims;
+        mca_dims.push_back(header->num_aux);
         mca_dims.push_back(header->num_energy_bins);
         std::stringstream ss;
         ss << "mca_" << index + first_channel_index;

@@ -130,6 +130,11 @@ private:
   static const std::string CONFIG_XSP_MODE_MCA;
   static const std::string CONFIG_XSP_MODE_LIST;
 
+
+  static const std::string STATUS_ACQ_COMPLETE;
+  static const std::string STATUS_FRAMES;
+
+
   void setupControlInterface(const std::string& ctrlEndpointString);
   void closeControlInterface();
   void runIpcService(void);
