@@ -71,6 +71,7 @@ const std::string XspressController::CONFIG_XSP_MODE_MCA              = XSP_MODE
 const std::string XspressController::CONFIG_XSP_MODE_LIST             = XSP_MODE_LIST;
 
 
+const std::string XspressController::STATUS                           = "status";
 const std::string XspressController::STATUS_ACQ_COMPLETE              = "acquisition_complete";
 const std::string XspressController::STATUS_FRAMES                    = "frames_acquired";
 
@@ -155,20 +156,6 @@ void XspressController::handleCtrlChannel()
                                << replyMsg.encode());
     }
     else if ((ctrlMsg.get_msg_type() == OdinData::IpcMessage::MsgTypeCmd) &&
-             (ctrlMsg.get_msg_val() == OdinData::IpcMessage::MsgValCmdStatus)) {
-      replyMsg.set_msg_type(OdinData::IpcMessage::MsgTypeAck);
-      this->provideStatus(replyMsg);
-      LOG4CXX_DEBUG_LEVEL(3, logger_, "Control thread reply message (status): "
-                             << replyMsg.encode());
-    }
-    else if ((ctrlMsg.get_msg_type() == OdinData::IpcMessage::MsgTypeCmd) &&
-             (ctrlMsg.get_msg_val() == OdinData::IpcMessage::MsgValCmdRequestVersion)) {
-      replyMsg.set_msg_type(OdinData::IpcMessage::MsgTypeAck);
-      this->provideVersion(replyMsg);
-      LOG4CXX_DEBUG_LEVEL(3, logger_, "Control thread reply message (request version): "
-                             << replyMsg.encode());
-    }
-    else if ((ctrlMsg.get_msg_type() == OdinData::IpcMessage::MsgTypeCmd) &&
              (ctrlMsg.get_msg_val() == OdinData::IpcMessage::MsgValCmdResetStatistics)) {
       replyMsg.set_msg_type(OdinData::IpcMessage::MsgTypeAck);
       this->resetStatistics(replyMsg);
@@ -214,9 +201,11 @@ void XspressController::handleCtrlChannel()
 void XspressController::provideStatus(OdinData::IpcMessage& reply)
 {
   // Clients expect the acq complete status, which is the inverse of the acquiring method
-  reply.set_param(XspressController::STATUS_ACQ_COMPLETE, !xsp_.getXspAcquiring());
+  reply.set_param(XspressController::STATUS + "/" +
+    XspressController::STATUS_ACQ_COMPLETE, !xsp_.getXspAcquiring());
   // Number of frames read for current acquisition
-  reply.set_param(XspressController::STATUS_FRAMES, xsp_.getXspFramesRead());
+  reply.set_param(XspressController::STATUS + "/" +
+    XspressController::STATUS_FRAMES, xsp_.getXspFramesRead());
 
 }
 
@@ -778,7 +767,8 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
     reply.set_param(XspressController::CONFIG_DAQ + "/" +
                     XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS + "[]", eps[index]);
   }
-
+  provideStatus(reply);
+  provideVersion(reply);
 }
 
 /**

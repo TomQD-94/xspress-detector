@@ -131,6 +131,7 @@ private:
   static const std::string CONFIG_XSP_MODE_LIST;
 
 
+  static const std::string STATUS;
   static const std::string STATUS_ACQ_COMPLETE;
   static const std::string STATUS_FRAMES;
 
