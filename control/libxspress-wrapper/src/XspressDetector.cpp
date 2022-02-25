@@ -47,6 +47,10 @@ XspressDetector::XspressDetector(bool simulation) :
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing XspressDetector");
+
+  // Setup a default for maximum channels to initialise all vectors of 
+  // scalar and dtc parameters.
+  setXspMaxChannels(DEFAULT_MAX_CHANNELS);
 }
 
 /** Destructor for XspressDetector class.
@@ -576,6 +580,53 @@ void XspressDetector::setXspMaxChannels(int max_channels)
   // Re initialise the frames read vector based on the maximum channels
   xsp_status_frames_.clear();
   xsp_status_frames_.resize(xsp_max_channels_);
+
+  // Check if we need to initialise the scalar configuration items
+  if (xsp_chan_sca5_low_lim_.size() != max_channels){
+    xsp_chan_sca5_low_lim_.resize(max_channels);
+  }
+  if (xsp_chan_sca5_high_lim_.size() != max_channels){
+    xsp_chan_sca5_high_lim_.resize(max_channels);
+  }
+  if (xsp_chan_sca6_low_lim_.size() != max_channels){
+    xsp_chan_sca6_low_lim_.resize(max_channels);
+  }
+  if (xsp_chan_sca6_high_lim_.size() != max_channels){
+    xsp_chan_sca6_high_lim_.resize(max_channels);
+  }
+  if (xsp_chan_sca4_threshold_.size() != max_channels){
+    xsp_chan_sca4_threshold_.resize(max_channels);
+  }
+
+  // Check if we need to initialise the DTC values
+  if (xsp_dtc_flags_.size() != max_channels){
+    xsp_dtc_flags_.resize(max_channels);
+  }
+  if (xsp_dtc_all_event_off_.size() != max_channels){
+    xsp_dtc_all_event_off_.resize(max_channels);
+  }
+  if (xsp_dtc_all_event_grad_.size() != max_channels){
+    xsp_dtc_all_event_grad_.resize(max_channels);
+  }
+  if (xsp_dtc_all_event_rate_off_.size() != max_channels){
+    xsp_dtc_all_event_rate_off_.resize(max_channels);
+  }
+  if (xsp_dtc_all_event_rate_grad_.size() != max_channels){
+    xsp_dtc_all_event_rate_grad_.resize(max_channels);
+  }
+  if (xsp_dtc_in_window_off_.size() != max_channels){
+    xsp_dtc_in_window_off_.resize(max_channels);
+  }
+  if (xsp_dtc_in_window_grad_.size() != max_channels){
+    xsp_dtc_in_window_grad_.resize(max_channels);
+  }
+  if (xsp_dtc_in_window_rate_off_.size() != max_channels){
+    xsp_dtc_in_window_rate_off_.resize(max_channels);
+  }
+  if (xsp_dtc_in_window_rate_grad_.size() != max_channels){
+    xsp_dtc_in_window_rate_grad_.resize(max_channels);
+  }
+
 }
 
 int XspressDetector::getXspMaxChannels()
