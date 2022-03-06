@@ -111,7 +111,10 @@ class XspressAdapter(ApiAdapter):
         logging.debug(debug_method())
         try:
             data = json_decode(request.body)
-            response = self.detector.put(path, data)
+            if "/" in path and path.split("/")[-1].isdigit():
+                response = self.detector.put_array(path, data)
+            else:
+                response = self.detector.put(path, data)
             status_code = 200
         except ConnectionError as e:
             response = {'error': str(e)}

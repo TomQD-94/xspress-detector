@@ -41,7 +41,7 @@ class AuotoPeriodicCallback(object):
             self.callback_sched.stop()
         elif not self.callback_sched.is_running() and self.predicate():
             self.callback_sched.start()
-        
+
     def start(self):
         self.predicate_sched.start()
 
@@ -81,14 +81,15 @@ class XspressTriggerMode:
     TM_LVDS_BOTH           = 8
 
 class XspressDetectorStr:
-    CONFIG_STATUS                = "status"
-    CONFIG_STATUS_SENSOR         = "sensor"
-    CONFIG_STATUS_SENSOR_HEIGHT  = "height"
-    CONFIG_STATUS_SENSOR_WIDTH   = "width"
-    CONFIG_STATUS_SENSOR_BYTES   = "bytes"
-    CONFIG_STATUS_MANUFACTURER   = "manufacturer"
-    CONFIG_STATUS_MODEL          = "model"
-
+    STATUS                       = "status"
+    STATUS_SENSOR                = "sensor"
+    STATUS_SENSOR_HEIGHT         = "height"
+    STATUS_SENSOR_WIDTH          = "width"
+    STATUS_SENSOR_BYTES          = "bytes"
+    STATUS_MANUFACTURER          = "manufacturer"
+    STATUS_MODEL                 = "model"
+    STATUS_ACQ_COMPLETE          = "acquisition_complete"
+    STATUS_FRAMES                = "frames_acquired"
 
     CONFIG_ADAPTER               = "adapter"
     CONFIG_ADAPTER_RESET         = "reset"
@@ -98,6 +99,7 @@ class XspressDetectorStr:
     CONFIG_ADAPTER_UP_TIME       = "up_time"
     CONFIG_ADAPTER_CONNECTED     = "connected"
     CONFIG_ADAPTER_USERNAME      = "username"
+    CONFIG_ADAPTER_CONFIG_RAW    = "config_raw"
 
     CONFIG_APP                   = "app"
     CONFIG_APP_SHUTDOWN          = "shutdow"
@@ -124,6 +126,23 @@ class XspressDetectorStr:
     CONFIG_XSP_EXPOSURE_TIME     = "exposure_time"
     CONFIG_XSP_NUM_IMAGES        = "num_images" # so only "num_images" is used
 
+    CONFIG_XSP_MODE                  = "mode"
+    CONFIG_XSP_SCA5_LOW              = "sca5_low_lim"
+    CONFIG_XSP_SCA5_HIGH             = "sca5_high_lim"
+    CONFIG_XSP_SCA6_LOW              = "sca6_low_lim"
+    CONFIG_XSP_SCA6_HIGH             = "sca6_high_lim"
+    CONFIG_XSP_SCA4_THRESH           = "sca4_threshold"
+
+    CONFIG_XSP_DTC_FLAGS             = "dtc_flags"
+    CONFIG_XSP_DTC_ALL_EVT_OFF       = "dtc_all_evt_off"
+    CONFIG_XSP_DTC_ALL_EVT_GRAD      = "dtc_all_evt_grad"
+    CONFIG_XSP_DTC_ALL_EVT_RATE_OFF  = "dtc_all_evt_rate_off"
+    CONFIG_XSP_DTC_ALL_EVT_RATE_GRAD = "dtc_all_evt_rate_grad"
+    CONFIG_XSP_DTC_IN_WIN_OFF        = "dtc_in_win_off"
+    CONFIG_XSP_DTC_IN_WIN_GRAD       = "dtc_in_win_grad"
+    CONFIG_XSP_DTC_IN_WIN_RATE_OFF   = "dtc_in_win_rate_off"
+    CONFIG_XSP_DTC_IN_WIN_RATE_GRAD  = "dtc_in_win_rate_grad"
+
     CONFIG_DAQ                   = "daq"
     CONFIG_DAQ_ENABLED           = "enabled"
     CONFIG_DAQ_ZMQ_ENDPOINTS     = "endpoints"
@@ -138,6 +157,14 @@ class XspressDetectorStr:
     CONFIG_CMD_TRIGGER           = "trigger"
     CONFIG_CMD_ACQUIRE           = "acquire"
 
+    VERSION                      = "version"
+    VERSION_XSPRESS_DETECTOR     = "xspress-detector"
+    VERSION_XSPRESS_DETECTOR_MAJOR = "major"
+    VERSION_XSPRESS_DETECTOR_MINOR = "minor"
+    VERSION_XSPRESS_DETECTOR_PATCH = "patch"
+    VERSION_XSPRESS_DETECTOR_SHORT = "short"
+    VERSION_XSPRESS_DETECTOR_FULL = "full"
+
 
 class XspressDetectorException(Exception):
     pass
@@ -151,6 +178,7 @@ class XspressDetector(object):
         self.endpoint = ENDPOINT_TEMPLATE.format("0.0.0.0", 12000)
         self.start_time = datetime.now()
         self.username = getpass.getuser()
+        self.config_raw : dict = {}
 
         self._async_client = XspressClient(ip, port, callback=self.on_recv_callback)
         self.timeout = 1
@@ -184,34 +212,51 @@ class XspressDetector(object):
         self.daq_enabled : bool = False
         self.daq_endpoints : list[str] = []
 
+        # status parameter tree members
+        self.acquisition_complete : bool = False
+        self.frames_acquired : int = 0
+
+        self.mode: int = 0 # 0 == 'spectrum', else == 'list'
+        self.sca5_low_lim : list[int] = []
+        self.sca5_high_lim : list[int] = []
+        self.sca6_low_lim : list[int] = []
+        self.sca6_high_lim : list[int] = []
+
         # cmd parameter tree members. No state to store.
         # connect, disconnect, save, restore, start, stop, trigger
 
         tree = \
         {
-            
+
             XspressDetectorStr.CONFIG_APP :
             {
 
                 XspressDetectorStr.CONFIG_APP_DEBUG :             (lambda: self.ctr_debug, partial(self._set, 'ctr_debug'), {}),
-                XspressDetectorStr.CONFIG_APP_CTRL_ENDPOINT:      (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
+                XspressDetectorStr.CONFIG_APP_CTRL_ENDPOINT :     (lambda: self.ctr_endpoint, partial(self._set, 'ctr_endpoint'), {}),
             },
-
+            XspressDetectorStr.CONFIG_DAQ :
+            {
+                XspressDetectorStr.CONFIG_DAQ_ENABLED :          (lambda: self.daq_enabled, partial(self._set, 'daq_enabled')),
+                XspressDetectorStr.CONFIG_DAQ_ZMQ_ENDPOINTS :    (lambda: self.daq_endpoints, partial(self._set, 'daq_endpoints')),
+            },
             XspressDetectorStr.CONFIG_ADAPTER : {
                 XspressDetectorStr.CONFIG_ADAPTER_START_TIME:     (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
                 XspressDetectorStr.CONFIG_ADAPTER_UP_TIME:        (lambda: str(datetime.now() - self.start_time), {}),
                 XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (self._async_client.is_connected, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_USERNAME:       (lambda: self.username, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_SCAN:           (self.sched.get_time, {}),
+                XspressDetectorStr.CONFIG_ADAPTER_CONFIG_RAW:     (lambda: self.config_raw, {}),
             },
-            XspressDetectorStr.CONFIG_STATUS : {
-                XspressDetectorStr.CONFIG_STATUS_SENSOR : {
-                    XspressDetectorStr.CONFIG_STATUS_SENSOR_HEIGHT: (lambda: self.max_channels, {}),
-                    XspressDetectorStr.CONFIG_STATUS_SENSOR_WIDTH: (lambda: self.max_spectra, {}),
-                    XspressDetectorStr.CONFIG_STATUS_SENSOR_BYTES: (lambda: self.max_spectra * self.max_spectra * 4, {}), # 4 bytes per int32 point
+            XspressDetectorStr.STATUS : {
+                XspressDetectorStr.STATUS_SENSOR : {
+                    XspressDetectorStr.STATUS_SENSOR_HEIGHT: (lambda: self.max_channels, {}),
+                    XspressDetectorStr.STATUS_SENSOR_WIDTH: (lambda: self.max_spectra, {}),
+                    XspressDetectorStr.STATUS_SENSOR_BYTES: (lambda: self.max_spectra * self.max_spectra * 4, {}), # 4 bytes per int32 point
                 },
-                XspressDetectorStr.CONFIG_STATUS_MANUFACTURER: (lambda: "Quandum Detectors", {}),
-                XspressDetectorStr.CONFIG_STATUS_MODEL: (lambda: "Xspress 4", {}),
+                XspressDetectorStr.STATUS_MANUFACTURER: (lambda: "Quandum Detectors", {}),
+                XspressDetectorStr.STATUS_MODEL: (lambda: "Xspress 4", {}),
+                XspressDetectorStr.STATUS_ACQ_COMPLETE : (lambda: self.acquisition_complete, partial(self._set, 'acquisition_complete'), {}),
+                XspressDetectorStr.STATUS_FRAMES : (lambda: self.frames_acquired, partial(self._set, 'frames_acquired'), {}),
             },
 
             XspressDetectorStr.CONFIG_XSP :
@@ -234,6 +279,10 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_XSP_DEBOUNCE :          (lambda: self.debounce, partial(self._set, "debounce"), {}),
                 XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME :     (lambda: self.exposure_time, partial(self._set, "exposure_time"), {}),
                 XspressDetectorStr.CONFIG_XSP_NUM_IMAGES :        (lambda: self.num_images, partial(self._set, "num_images"), {}),
+                XspressDetectorStr.CONFIG_XSP_SCA5_LOW :          (lambda: self.sca5_low_lim, partial(self._set, "sca5_low_lim"), {}),
+                XspressDetectorStr.CONFIG_XSP_SCA5_HIGH :         (lambda: self.sca5_high_lim, partial(self._set, "sca5_high_lim"), {}),
+                XspressDetectorStr.CONFIG_XSP_SCA6_LOW :          (lambda: self.sca6_low_lim, partial(self._set, "sca6_low_lim"), {}),
+                XspressDetectorStr.CONFIG_XSP_SCA6_HIGH :         (lambda: self.sca6_high_lim, partial(self._set, "sca6_high_lim"), {}),
             }
         }
         self.parameter_tree = ParameterTree(tree)
@@ -273,6 +322,7 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE), {}),
                 XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME), {}),
                 XspressDetectorStr.CONFIG_XSP_NUM_IMAGES : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_NUM_IMAGES), {}),
+                XspressDetectorStr.CONFIG_XSP_SCA5_LOW : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_SCA5_LOW), {}),
             },
             XspressDetectorStr.CONFIG_CMD :
             {
@@ -299,7 +349,7 @@ class XspressDetector(object):
             self.sched.start()
         else:
             self.sched.stop()
-        
+
     def _set(self, attr_name, value):
         setattr(self, attr_name, value)
 
@@ -321,6 +371,16 @@ class XspressDetector(object):
             logging.error(f"parameter_tree error: {e}")
             raise XspressDetectorException(e)
 
+    def put_array(self, path, data):
+        logging.error(debug_method())
+        path = path.split("/")
+        index = int(path[-1])
+        array_name = path[-2]
+        arr = self.__dict__[array_name].copy()
+        arr[index] = data
+        msg = self._build_message(MessageType.CONFIG_XSP, {array_name: arr})
+        self._async_client.send_requst(msg)
+        return {'async_message sent': None}
 
     def get(self, path):
         try:
@@ -335,11 +395,12 @@ class XspressDetector(object):
         data = _cast_str(msg[0])
         logging.debug(f"queue size = {self._async_client.get_queue_size()}")
         logging.debug(f"message recieved = {data}")
-        ipc_msg = IpcMessage(from_str=data)
+        ipc_msg : IpcMessage = IpcMessage(from_str=data)
 
         if not ipc_msg.is_valid():
             raise XspressDetectorException("IpcMessage recieved is not valid")
         if ipc_msg.get_msg_val() == XspressDetectorStr.CONFIG_REQUEST:
+            self.config_raw = ipc_msg.get_params()
             if ipc_msg.get_msg_type() == IpcMessage.ACK and ipc_msg.get_params():
                 self._param_tree_set_recursive(BASE_PATH, ipc_msg.get_params())
             else:
