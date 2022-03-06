@@ -683,6 +683,9 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
                   XspressController::CONFIG_XSP_EXPOSURE_TIME, xsp_.getXspExposureTime());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_FRAMES, xsp_.getXspFrames());
+  reply.set_param(XspressController::CONFIG_XSP + "/" +
+                  XspressController::CONFIG_XSP_MODE, xsp_.getXspMode());
+
   std::vector<uint32_t> sca5ll = xsp_.getSca5LowLimits();
   for (int index = 0; index < sca5ll.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
