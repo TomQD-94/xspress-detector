@@ -999,6 +999,39 @@ std::vector<double> XspressDetector::getDtcInWindowRateGrad()
   return xsp_dtc_in_window_rate_grad_;
 }
 
+std::vector<uint32_t> XspressDetector::getLiveScalars(uint32_t index)
+{
+  std::vector<uint32_t> reply;
+  if (daq_){
+    reply = daq_->read_live_scalar(index);
+  } else {
+    reply.resize(xsp_max_channels_);
+  }
+  return reply;
+}
+
+std::vector<double> XspressDetector::getLiveDtcFactors()
+{
+  std::vector<double> reply;
+  if (daq_){
+    reply = daq_->read_live_dtc();
+  } else {
+    reply.resize(xsp_max_channels_);
+  }
+  return reply;
+}
+
+std::vector<double> XspressDetector::getLiveInpEst()
+{
+  std::vector<double> reply;
+  if (daq_){
+    reply = daq_->read_live_inp_est();
+  } else {
+    reply.resize(xsp_max_channels_);
+  }
+  return reply;
+}
+
 bool XspressDetector::getXspAcquiring()
 {
   // This method has two jobs.  The first is to check

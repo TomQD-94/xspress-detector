@@ -74,6 +74,17 @@ const std::string XspressController::CONFIG_XSP_MODE_LIST             = XSP_MODE
 const std::string XspressController::STATUS                           = "status";
 const std::string XspressController::STATUS_ACQ_COMPLETE              = "acquisition_complete";
 const std::string XspressController::STATUS_FRAMES                    = "frames_acquired";
+const std::string XspressController::STATUS_LIVE_SCALAR[]             = {"scalar_0",
+                                                                         "scalar_1",
+                                                                         "scalar_2",
+                                                                         "scalar_3",
+                                                                         "scalar_4",
+                                                                         "scalar_5",
+                                                                         "scalar_6",
+                                                                         "scalar_7",
+                                                                         "scalar_8"};
+const std::string XspressController::STATUS_LIVE_DTC                  = "dtc";
+const std::string XspressController::STATUS_LIVE_INP_EST              = "inp_est";
 
 
 /** Construct a new XspressController class.
@@ -207,6 +218,26 @@ void XspressController::provideStatus(OdinData::IpcMessage& reply)
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_FRAMES, xsp_.getXspFramesRead());
 
+  // Live scalar values from latest MCA
+  for (int sc_index = 0; sc_index < NUMBER_OF_SCALARS; sc_index++){
+    std::vector<uint32_t> live_scalars = xsp_.getLiveScalars(sc_index);
+    for (int index = 0; index < live_scalars.size(); index++){
+      reply.set_param(XspressController::STATUS + "/" +
+                      XspressController::STATUS_LIVE_SCALAR[sc_index] + "[]", live_scalars[index]);
+    }
+  }
+  // Live DTC factors from latest MCA
+  std::vector<double> live_dtc = xsp_.getLiveDtcFactors();
+  for (int index = 0; index < live_dtc.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_LIVE_DTC + "[]", live_dtc[index]);
+  }
+  // Live input estimates from latest MCA
+  std::vector<double> live_inp_est = xsp_.getLiveInpEst();
+  for (int index = 0; index < live_inp_est.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_LIVE_INP_EST + "[]", live_inp_est[index]);
+  }
 }
 
 /** Provide version information to requesting clients.
