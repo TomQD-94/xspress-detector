@@ -25,6 +25,7 @@
 using namespace log4cxx;
 using namespace log4cxx::helpers;
 
+#define NUMBER_OF_SCALARS 9
 
 namespace Xspress
 {
@@ -135,6 +136,9 @@ private:
   static const std::string STATUS_ACQ_COMPLETE;
   static const std::string STATUS_FRAMES;
 
+  static const std::string STATUS_LIVE_SCALAR[NUMBER_OF_SCALARS];
+  static const std::string STATUS_LIVE_DTC;
+  static const std::string STATUS_LIVE_INP_EST;
 
   void setupControlInterface(const std::string& ctrlEndpointString);
   void closeControlInterface();

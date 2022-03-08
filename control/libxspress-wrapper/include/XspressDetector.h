@@ -130,6 +130,9 @@ public:
   std::vector<double> getDtcInWindowGrad();
   std::vector<double> getDtcInWindowRateOff();
   std::vector<double> getDtcInWindowRateGrad();
+  std::vector<uint32_t> getLiveScalars(uint32_t index);
+  std::vector<double> getLiveDtcFactors();
+  std::vector<double> getLiveInpEst();
   bool getXspAcquiring();
   uint32_t getXspFramesRead();
   

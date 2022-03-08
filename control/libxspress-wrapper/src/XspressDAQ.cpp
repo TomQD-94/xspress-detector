@@ -39,6 +39,21 @@ XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr,
   num_threads_ = endpoints.size();
   num_spectra_ = num_spectra;
 
+  // Init the live scalar vectors
+  live_scalar_0_.resize(num_channels);
+  live_scalar_1_.resize(num_channels);
+  live_scalar_2_.resize(num_channels);
+  live_scalar_3_.resize(num_channels);
+  live_scalar_4_.resize(num_channels);
+  live_scalar_5_.resize(num_channels);
+  live_scalar_6_.resize(num_channels);
+  live_scalar_7_.resize(num_channels);
+  live_scalar_8_.resize(num_channels);
+
+  // Init the live scalar vectors
+  live_dtc_.resize(num_channels);
+  live_inp_est_.resize(num_channels);
+
   // Create the control thread queue
   ctrl_queue_ = boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > >(new WorkQueue<boost::shared_ptr<XspressDAQTask> >());
   // Create the control thread
@@ -93,6 +108,57 @@ XspressDAQ::~XspressDAQ()
   // Destroy the ZMQ context
   context_->close();
   delete(context_);
+}
+
+std::vector<uint32_t> XspressDAQ::read_live_scalar(uint32_t index)
+{
+  std::vector<uint32_t> reply;
+  // Lock the scalar data
+  boost::lock_guard<boost::mutex> lock(data_mutex_);
+  switch (index){
+    case 0:
+      reply = live_scalar_0_;
+      break;
+    case 1:
+      reply = live_scalar_1_;
+      break;
+    case 2:
+      reply = live_scalar_2_;
+      break;
+    case 3:
+      reply = live_scalar_3_;
+      break;
+    case 4:
+      reply = live_scalar_4_;
+      break;
+    case 5:
+      reply = live_scalar_5_;
+      break;
+    case 6:
+      reply = live_scalar_6_;
+      break;
+    case 7:
+      reply = live_scalar_7_;
+      break;
+    case 8:
+      reply = live_scalar_8_;
+      break;
+  }
+  return reply;
+}
+
+std::vector<double> XspressDAQ::read_live_dtc()
+{
+  // Lock the dtc data
+  boost::lock_guard<boost::mutex> lock(data_mutex_);
+  return live_dtc_;
+}
+
+std::vector<double> XspressDAQ::read_live_inp_est()
+{
+  // Lock the inp est data
+  boost::lock_guard<boost::mutex> lock(data_mutex_);
+  return live_inp_est_;
 }
 
 void XspressDAQ::set_num_aux_data(uint32_t num_aux_data)
@@ -318,26 +384,36 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
                                                     channel_index,
                                                     num_channels);
 
-          for (int tind = 0; tind < 4; tind++){
-            LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] Scalers [" << channel_index+tind << 
-                                    "] " << s_ptr[(tind*9)+0] <<
-                                    " " << s_ptr[(tind*9)+1] <<
-                                    " " << s_ptr[(tind*9)+2] <<
-                                    " " << s_ptr[(tind*9)+3] <<
-                                    " " << s_ptr[(tind*9)+4] <<
-                                    " " << s_ptr[(tind*9)+5] <<
-                                    " " << s_ptr[(tind*9)+6] <<
-                                    " " << s_ptr[(tind*9)+7] <<
-                                    " " << s_ptr[(tind*9)+8]);
-          }
+          // Lock the live data
+          {
+            boost::lock_guard<boost::mutex> lock(data_mutex_);
 
-//        for (int cindex = 0; cindex < num_channels; cindex++){
-//            int total = 0;
-//            for (int sindex = 0; sindex < num_spectra_; sindex++){
-//            total += pMCAData[sindex + (cindex*num_spectra_)];
-//            }
-//            //LOG4CXX_DEBUG_LEVEL(1, logger_, "MCA channel[" << channel_index+cindex << "] total: " << total);
-//        }
+            for (int c_index = 0; c_index < num_channels; c_index++){
+              live_scalar_0_[c_index + channel_index] = s_ptr[(c_index*9)+0];
+              live_scalar_1_[c_index + channel_index] = s_ptr[(c_index*9)+1];
+              live_scalar_2_[c_index + channel_index] = s_ptr[(c_index*9)+2];
+              live_scalar_3_[c_index + channel_index] = s_ptr[(c_index*9)+3];
+              live_scalar_4_[c_index + channel_index] = s_ptr[(c_index*9)+4];
+              live_scalar_5_[c_index + channel_index] = s_ptr[(c_index*9)+5];
+              live_scalar_6_[c_index + channel_index] = s_ptr[(c_index*9)+6];
+              live_scalar_7_[c_index + channel_index] = s_ptr[(c_index*9)+7];
+              live_scalar_8_[c_index + channel_index] = s_ptr[(c_index*9)+8];
+
+              live_dtc_[c_index + channel_index] = dtc_ptr[c_index];
+              live_inp_est_[c_index + channel_index] = inp_est_ptr[c_index];
+
+              LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] Scalers [" << channel_index+c_index << 
+                                  "] " << s_ptr[(c_index*9)+0] <<
+                                  " " << s_ptr[(c_index*9)+1] <<
+                                  " " << s_ptr[(c_index*9)+2] <<
+                                  " " << s_ptr[(c_index*9)+3] <<
+                                  " " << s_ptr[(c_index*9)+4] <<
+                                  " " << s_ptr[(c_index*9)+5] <<
+                                  " " << s_ptr[(c_index*9)+6] <<
+                                  " " << s_ptr[(c_index*9)+7] <<
+                                  " " << s_ptr[(c_index*9)+8]);
+            }
+          }
 
           LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => sending ZMQ message");
           // Construct the ZMQ message wrapper and send the frame

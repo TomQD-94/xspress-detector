@@ -60,6 +60,9 @@ public:
              uint32_t num_spectra,
              std::vector<std::string> endpoints);
   virtual ~XspressDAQ();
+  std::vector<uint32_t> read_live_scalar(uint32_t index);
+  std::vector<double> read_live_dtc();
+  std::vector<double> read_live_inp_est();
   void set_num_aux_data(uint32_t num_aux_data);
   boost::shared_ptr<XspressDAQTask> create_task(uint32_t type);
   boost::shared_ptr<XspressDAQTask> create_task(uint32_t type, uint32_t value1);
@@ -108,6 +111,24 @@ private:
   bool acq_running_;
   /** Number of frames read out of shared memory in current acquisition */
   uint32_t no_of_frames_;
+
+  /** Live scalar values */
+  std::vector<uint32_t>         live_scalar_0_;
+  std::vector<uint32_t>         live_scalar_1_;
+  std::vector<uint32_t>         live_scalar_2_;
+  std::vector<uint32_t>         live_scalar_3_;
+  std::vector<uint32_t>         live_scalar_4_;
+  std::vector<uint32_t>         live_scalar_5_;
+  std::vector<uint32_t>         live_scalar_6_;
+  std::vector<uint32_t>         live_scalar_7_;
+  std::vector<uint32_t>         live_scalar_8_;
+  /** Live DTC values */
+  std::vector<double>           live_dtc_;
+  std::vector<double>           live_inp_est_;
+
+
+  /** Data mutex for multi-threaded DAQ locking */
+  boost::mutex                  data_mutex_;
 };
 
 } /* namespace Xspress */
