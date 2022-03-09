@@ -8,8 +8,10 @@ import traceback
 import logging
 import re
 from tornado.escape import json_decode
-from odin.adapters.adapter import ApiAdapter, ApiAdapterResponse, request_types, response_types
+from odin.adapters.adapter import request_types, response_types, ApiAdapterResponse
+from odin.adapters.async_adapter import AsyncApiAdapter
 from xspress_odin.detector import XspressDetector, XspressDetectorException
+from odin_data.ipc_message import IpcMessage
 
 from .debug import debug_method
 
@@ -25,7 +27,7 @@ def require_valid_detector(func):
     return wrapper
 
 
-class XspressAdapter(ApiAdapter):
+class XspressAdapter(AsyncApiAdapter):
     """XspressAdapter class.
 
     This class provides the adapter interface between the ODIN server and the Xspress detector
@@ -71,7 +73,7 @@ class XspressAdapter(ApiAdapter):
     @request_types('application/json')
     @response_types('application/json', default='application/json')
     @require_valid_detector
-    def get(self, path, request):
+    async def get(self, path, request):
         """Handle an HTTP GET request.
 
         This method is the implementation of the HTTP GET handler for ExcaliburAdapter.
@@ -99,7 +101,7 @@ class XspressAdapter(ApiAdapter):
     @request_types('application/json')
     @response_types('application/json', default='application/json')
     @require_valid_detector
-    def put(self, path, request):
+    async def put(self, path, request):
         """Handle an HTTP PUT request.
 
         This method is the implementation of the HTTP PUT handler for ExcaliburAdapter/
@@ -110,11 +112,14 @@ class XspressAdapter(ApiAdapter):
         """
         logging.debug(debug_method())
         try:
+            # msg = IpcMessage("cmd", "configure")
+            # msg.set_param("config", {"max_channels": 10})
+            # resp = await self.detector.test_client.send_recv(msg)
             data = json_decode(request.body)
             if "/" in path and path.split("/")[-1].isdigit():
-                response = self.detector.put_array(path, data)
+                response = await self.detector.put_array(path, data)
             else:
-                response = self.detector.put(path, data)
+                response = await self.detector.put_single(path, data)
             status_code = 200
         except ConnectionError as e:
             response = {'error': str(e)}
@@ -126,29 +131,12 @@ class XspressAdapter(ApiAdapter):
             status_code = 400
         except Exception as e:
             logging.error(traceback.format_exc())
-            response = {'error' : 'Unhandled exception :{}'.format(e)}
+            response = {f'{type(e).__name__} was raised' : f'{e}'}
             status_code = 400
 
-        return ApiAdapterResponse(response, status_code=status_code)
-
-    @request_types('application/json')
-    @response_types('application/json', default='application/json')
-    @require_valid_detector
-    def delete(self, path, request):
-        """Handle an HTTP DELETE request.
-
-        This method is the implementation of the HTTP DELETE verb for ExcaliburAdapter.
-
-        :param path: URI path of the DELETE request
-        :param request: Tornado HTTP request object
-        :return: ApiAdapterResponse object to be returned to the client
-        """
-        response = {'response': '{}: DELETE on path {}'.format(self.name, path)}
-        status_code = 200
-
-        logging.debug(response)
 
         return ApiAdapterResponse(response, status_code=status_code)
+
 
     def cleanup(self):
         if self.detector:
