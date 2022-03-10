@@ -72,8 +72,11 @@ const std::string XspressController::CONFIG_XSP_MODE_LIST             = XSP_MODE
 
 
 const std::string XspressController::STATUS                           = "status";
+const std::string XspressController::STATUS_CONNECTED                 = "connected";
 const std::string XspressController::STATUS_ACQ_COMPLETE              = "acquisition_complete";
 const std::string XspressController::STATUS_FRAMES                    = "frames_acquired";
+const std::string XspressController::STATUS_CHANNEL_FRAMES            = "ch_frames_acquired";
+const std::string XspressController::STATUS_FEM_DROPPED_FRAMES        = "fem_dropped_frames";
 const std::string XspressController::STATUS_LIVE_SCALAR[]             = {"scalar_0",
                                                                          "scalar_1",
                                                                          "scalar_2",
@@ -85,6 +88,13 @@ const std::string XspressController::STATUS_LIVE_SCALAR[]             = {"scalar
                                                                          "scalar_8"};
 const std::string XspressController::STATUS_LIVE_DTC                  = "dtc";
 const std::string XspressController::STATUS_LIVE_INP_EST              = "inp_est";
+
+const std::string XspressController::STATUS_TEMPERATURE[]             = {"temp_0",
+                                                                         "temp_1",
+                                                                         "temp_2",
+                                                                         "temp_3",
+                                                                         "temp_4",
+                                                                         "temp_5"};
 
 
 /** Construct a new XspressController class.
@@ -211,12 +221,27 @@ void XspressController::handleCtrlChannel()
  */
 void XspressController::provideStatus(OdinData::IpcMessage& reply)
 {
+  // Check if we are connected to the hardware
+  reply.set_param(XspressController::STATUS + "/" +
+    XspressController::STATUS_CONNECTED, xsp_.checkConnected());
   // Clients expect the acq complete status, which is the inverse of the acquiring method
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_ACQ_COMPLETE, !xsp_.getXspAcquiring());
   // Number of frames read for current acquisition
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_FRAMES, xsp_.getXspFramesRead());
+  // Number of frames per FEM
+  std::vector<int32_t> ch_frames = xsp_.getXspFEMFramesRead();
+  for (int index = 0; index < ch_frames.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_CHANNEL_FRAMES + "[]", ch_frames[index]);
+  }
+  // Number of dropped frames per FEM
+  std::vector<int32_t> dropped_frames = xsp_.getXspFEMDroppedFrames();
+  for (int index = 0; index < dropped_frames.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_FEM_DROPPED_FRAMES + "[]", dropped_frames[index]);
+  }
 
   // Live scalar values from latest MCA
   for (int sc_index = 0; sc_index < NUMBER_OF_SCALARS; sc_index++){
@@ -237,6 +262,38 @@ void XspressController::provideStatus(OdinData::IpcMessage& reply)
   for (int index = 0; index < live_inp_est.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_LIVE_INP_EST + "[]", live_inp_est[index]);
+  }
+
+  // Temperatures
+  std::vector<float> temp_0 = xsp_.getTemperature0();
+  for (int index = 0; index < temp_0.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_TEMPERATURE[0] + "[]", (double)temp_0[index]);
+  }
+  std::vector<float> temp_1 = xsp_.getTemperature1();
+  for (int index = 0; index < temp_1.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_TEMPERATURE[1] + "[]", (double)temp_1[index]);
+  }
+  std::vector<float> temp_2 = xsp_.getTemperature2();
+  for (int index = 0; index < temp_2.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_TEMPERATURE[2] + "[]", (double)temp_2[index]);
+  }
+  std::vector<float> temp_3 = xsp_.getTemperature3();
+  for (int index = 0; index < temp_3.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_TEMPERATURE[3] + "[]", (double)temp_3[index]);
+  }
+  std::vector<float> temp_4 = xsp_.getTemperature4();
+  for (int index = 0; index < temp_4.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_TEMPERATURE[4] + "[]", (double)temp_4[index]);
+  }
+  std::vector<float> temp_5 = xsp_.getTemperature0();
+  for (int index = 0; index < temp_5.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_TEMPERATURE[5] + "[]", (double)temp_5[index]);
   }
 }
 
@@ -929,6 +986,9 @@ void XspressController::tickTimer(void)
   {
     LOG4CXX_DEBUG_LEVEL(1, logger_, "IPC thread terminate detected in timer");
     reactor_->stop();
+  } else {
+    // We will read the FEM status in this timer execution
+    xsp_.readFemStatus();
   }
 }
 

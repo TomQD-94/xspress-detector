@@ -158,7 +158,7 @@ int XspressDetector::connect_list_mode()
   return status;
 }
 
-int XspressDetector::checkConnected()
+bool XspressDetector::checkConnected()
 {
   return connected_;
 }
@@ -374,26 +374,28 @@ void XspressDetector::readFemStatus()
 {
   int status = XSP_STATUS_OK;
 
-  // number of frames read out for each channel
-  status = detector_.read_frames(xsp_max_channels_, xsp_status_frames_);
-  if (status != XSP_STATUS_OK){
-    setErrorString("Cannot read frame counters");
-  }
-  // read dropped frames
-  status = detector_.read_dropped_frames(xsp_status_dropped_frames_);
-  if (status != XSP_STATUS_OK){
-    setErrorString("Cannot read dropped frame counters");
-  }
+  if (checkConnected()){
+    // number of frames read out for each channel
+    status = detector_.read_frames(xsp_max_channels_, xsp_status_frames_);
+    if (status != XSP_STATUS_OK){
+      setErrorString("Cannot read frame counters");
+    }
+    // read dropped frames
+    status = detector_.read_dropped_frames(xsp_status_dropped_frames_);
+    if (status != XSP_STATUS_OK){
+      setErrorString("Cannot read dropped frame counters");
+    }
 
-  // read temperatures
-  status = detector_.read_temperatures(xsp_status_temperature_0_,
-                                       xsp_status_temperature_1_,
-                                       xsp_status_temperature_2_,
-                                       xsp_status_temperature_3_,
-                                       xsp_status_temperature_4_,
-                                       xsp_status_temperature_5_);
-  if (status != XSP_STATUS_OK){
-    setErrorString("Cannot read temperatures");
+    // read temperatures
+    status = detector_.read_temperatures(xsp_status_temperature_0_,
+                                         xsp_status_temperature_1_,
+                                         xsp_status_temperature_2_,
+                                         xsp_status_temperature_3_,
+                                         xsp_status_temperature_4_,
+                                         xsp_status_temperature_5_);
+    if (status != XSP_STATUS_OK){
+      setErrorString("Cannot read temperatures");
+    }
   }
 }
 
@@ -1058,6 +1060,46 @@ uint32_t XspressDetector::getXspFramesRead()
     frames = daq_->getFramesRead();
   }
   return frames;
+}
+
+std::vector<float> XspressDetector::getTemperature0()
+{
+  return xsp_status_temperature_0_;
+}
+
+std::vector<float> XspressDetector::getTemperature1()
+{
+  return xsp_status_temperature_1_;
+}
+
+std::vector<float> XspressDetector::getTemperature2()
+{
+  return xsp_status_temperature_2_;
+}
+
+std::vector<float> XspressDetector::getTemperature3()
+{
+  return xsp_status_temperature_3_;
+}
+
+std::vector<float> XspressDetector::getTemperature4()
+{
+  return xsp_status_temperature_4_;
+}
+
+std::vector<float> XspressDetector::getTemperature5()
+{
+  return xsp_status_temperature_5_;
+}
+
+std::vector<int32_t> XspressDetector::getXspFEMFramesRead()
+{
+  return xsp_status_frames_;
+}
+
+std::vector<int32_t> XspressDetector::getXspFEMDroppedFrames()
+{
+  return xsp_status_dropped_frames_;
 }
 
 } /* namespace Xspress */

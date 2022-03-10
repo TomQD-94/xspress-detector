@@ -430,7 +430,7 @@ int LibXspressWrapper::check_connected_channels(std::vector<bool>& cards_connect
 int LibXspressWrapper::read_frames(int max_channels, std::vector<int32_t>& frame_counters)
 {
   int status = XSP_STATUS_OK;
-  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_resolve_path and using Xsp3Sys[].histogram[].cur_tf_ext");
+  LOG4CXX_DEBUG_LEVEL(5, logger_, "Xspress wrapper calling xsp3_resolve_path and using Xsp3Sys[].histogram[].cur_tf_ext");
 
   if (frame_counters.size() != max_channels){
     setErrorString("Frame counter vector has a different dimension to the number of channels");
@@ -455,7 +455,7 @@ int LibXspressWrapper::read_temperatures(std::vector<float>& t0,
                                          std::vector<float>& t5)
 {
   int status = XSP_STATUS_OK;
-  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_i2c_read_adc_temp and xsp3_i2c_read_fem_temp");
+  LOG4CXX_DEBUG_LEVEL(5, logger_, "Xspress wrapper calling xsp3_i2c_read_adc_temp and xsp3_i2c_read_fem_temp");
   int num_cards = Xsp3Sys[xsp_handle_].num_cards;
   if (t0.size() != num_cards){
     setErrorString("temperature vector 0 has a different size to the number of cards");
@@ -495,18 +495,12 @@ int LibXspressWrapper::read_temperatures(std::vector<float>& t0,
         t1[card] = temps[1];
         t2[card] = temps[2];
         t3[card] = temps[3];
-      } else {
-        setErrorString("Unable to read temperatures in xsp3_i2c_read_adc_temp");
-        status = XSP_STATUS_ERROR;
       }
       tempsPtr += 4;
       xsp_status = xsp3_i2c_read_fem_temp(xsp_handle_, card, tempsPtr);
       if (xsp_status == XSP3_OK) {
         t4[card] = temps[4];
         t5[card] = temps[5];
-      } else {
-        setErrorString("Unable to read temperatures in xsp3_i2c_read_fem_temp");
-        status = XSP_STATUS_ERROR;
       }
     }
   }
@@ -516,7 +510,7 @@ int LibXspressWrapper::read_temperatures(std::vector<float>& t0,
 int LibXspressWrapper::read_dropped_frames(std::vector<int32_t>& dropped_frames)
 {
   int status = XSP_STATUS_OK;
-  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper using Xsp3Sys[].histogram[].dropped_frames");
+  LOG4CXX_DEBUG_LEVEL(5, logger_, "Xspress wrapper using Xsp3Sys[].histogram[].dropped_frames");
   int num_cards = Xsp3Sys[xsp_handle_].num_cards;
   if (dropped_frames.size() != num_cards){
     setErrorString("dropped frames vector has a different size to the number of cards");
