@@ -58,7 +58,7 @@ const std::string XspressController::CONFIG_DAQ                       = "daq";
 const std::string XspressController::CONFIG_DAQ_ENABLED               = "enabled";
 const std::string XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS         = "endpoints";
 
-const std::string XspressController::CONFIG_CMD                       = "cmd";
+const std::string XspressController::CONFIG_CMD                       = "command";
 const std::string XspressController::CONFIG_CMD_CONNECT               = "connect";
 const std::string XspressController::CONFIG_CMD_DISCONNECT            = "disconnect";
 const std::string XspressController::CONFIG_CMD_SAVE                  = "save";

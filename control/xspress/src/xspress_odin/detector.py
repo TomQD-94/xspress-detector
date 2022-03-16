@@ -170,7 +170,7 @@ class XspressDetectorStr:
     CONFIG_DAQ_ENABLED           = "enabled"
     CONFIG_DAQ_ZMQ_ENDPOINTS     = "endpoints"
 
-    CONFIG_CMD                   = "cmd"
+    CONFIG_CMD                   = "command"
     CONFIG_CMD_CONNECT           = "connect"
     CONFIG_CMD_DISCONNECT        = "disconnect"
     CONFIG_CMD_SAVE              = "save"
@@ -604,7 +604,7 @@ class XspressDetector(object):
 
     def _build_message(self, message_type: MessageType, config: dict = None):
         if message_type == MessageType.REQUEST:
-            msg = IpcMessage(XspressDetectorStr.CONFIG_CMD, XspressDetectorStr.CONFIG_REQUEST)
+            msg = IpcMessage("cmd", XspressDetectorStr.CONFIG_REQUEST)
             return msg
         elif message_type == MessageType.CONFIG_APP:
             params_group = XspressDetectorStr.CONFIG_APP
