@@ -9,7 +9,7 @@
         "*.ipp": "cpp"
     },
     "cmake.configureOnOpen": false,
-    "python.pythonPath": "/scratch/ovs72384/pipenv/xspress-jNPY9xKX/bin/python",
+    "python.pythonPath": "/dls_sw/work/R3.14.12.7/support/xspress-odin/xspress-detector/control/xspress/.venvs/xspress-ZEYHa99R/bin/python",
     "prettier.configPath": ".prettierrc",
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "[javascript]": {

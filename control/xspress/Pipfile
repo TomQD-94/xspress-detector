@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 xspress-odin = {editable = true, path = "."}
+odin-control = {editable = true, path = "/dls_sw/work/R3.14.12.7/support/xspress-odin/odin-control"}
+odin-data = {editable = true, path = "/dls_sw/work/R3.14.12.7/support/xspress-odin/odin-data/tools/python"}
 
 [dev-packages]
 
