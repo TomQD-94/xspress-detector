@@ -10,7 +10,7 @@ import re
 from tornado.escape import json_decode
 from odin.adapters.adapter import request_types, response_types, ApiAdapterResponse
 from odin.adapters.async_adapter import AsyncApiAdapter
-from xspress_odin.detector import XspressDetector, XspressDetectorException
+from xspress_odin.detector import XspressDetector, XspressDetectorException, XspressTriggerMode
 from odin_data.ipc_message import IpcMessage
 
 from .debug import debug_method
@@ -53,16 +53,25 @@ class XspressAdapter(AsyncApiAdapter):
             self.detector = XspressDetector(ip, port)
             logging.info(f"instaciated XspressDetector with ip = {ip} and port {port}")
 
-            base_ip = self.options['base_ip']
             num_cards = int(self.options['num_cards'])
-            max_channels = int(self.options['max_channels'])
-            settings_path = self.options['settings_path']
-            # run_flags = self.options['run_flags']
             num_tf = int(self.options["num_tf"])
+            base_ip = self.options['base_ip']
+            max_channels = int(self.options['max_channels'])
+            max_spectra = int(self.options["max_spectra"])
+            settings_path = self.options['settings_path']
+            run_flags = int(self.options['run_flags'])
             debug = int(self.options["debug"])
-            # trigger_mode = XspressTriggerMode.TM_SOFTWARE
-            # self.detector.configure(base_ip, num_cards, max_channels, config_path, run_flags, trigger_mode, frames, exposure_time)
-            self.detector.configure(num_cards, num_tf, base_ip, max_channels, settings_path, debug)
+            # trigger_mode = XspressTriggerMode.str2int(self.options["trigger_mode"])
+            self.detector.configure(
+                num_cards,
+                num_tf,
+                base_ip,
+                max_channels,
+                max_spectra,
+                settings_path,
+                run_flags,
+                debug,
+                )
             logging.debug('done configuring detector')
         except XspressDetectorException as e:
             logging.error('XspressAdapter failed to initialise detector: %s', e)
@@ -136,9 +145,3 @@ class XspressAdapter(AsyncApiAdapter):
 
 
         return ApiAdapterResponse(response, status_code=status_code)
-
-
-    def cleanup(self):
-        if self.detector:
-            self.detector.shutdown()
-

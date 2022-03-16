@@ -16,7 +16,7 @@ import tornado.ioloop
 
 from odin.http.server import HttpServer
 from odin.config.parser import ConfigParser, ConfigError
-from odin_data.logconfig import setup_logging, add_graylog_handler, add_logger
+from odin_data.logconfig import setup_logging, add_graylog_handler
 
 
 def shutdown_handler():  # pragma: no cover
@@ -65,7 +65,6 @@ def main(argv=None):
         logserverport = int(logserverport)
         add_graylog_handler(logserver, logserverport, static_fields=static_fields)
 
-    add_logger("xspress_detector", {"level": config.access_logging, "propagate": True})
     setup_logging()
 
 

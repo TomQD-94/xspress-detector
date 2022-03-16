@@ -5,20 +5,19 @@ import inspect
 from enum import Enum
 from functools import partial
 from datetime import datetime
-from multiprocessing.sharedctypes import Value
-from xmlrpc.client import SERVER_ERROR
 
 from odin_data.ipc_message import IpcMessage
 from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 from tornado.ioloop import PeriodicCallback
 
-from .client import XspressClient
+from .client import AsyncClient, CallbackClient
 from .debug import debug_method
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
 UPDATE_PARAMS_PERIOD_SECONDS = 5
 QUEUE_SIZE_LIMIT = 10
+
 
 def is_coroutine(object):
     """
@@ -91,6 +90,21 @@ class XspressTriggerMode:
     TM_LVDS_VETO_ONLY      = 7
     TM_LVDS_BOTH           = 8
 
+    def str2int(mode):
+        x = XspressTriggerMode
+        map = dict(
+            software=x.TM_SOFTWARE,
+            ttl_rising_edge=x.TM_TTL_RISING_EDGE,
+            burst=x.TM_BURST,
+            ttl_veto_only=x.TM_TTL_VETO_ONLY,
+            software_start_stop=x.TM_SOFTWARE_START_STOP,
+            idc=x.TM_IDC,
+            ttl_both=x.TM_TTL_BOTH,
+            lvds_veto_only=x.TM_LVDS_VETO_ONLY,
+            lvds_both=x.TM_LVDS_BOTH
+        )
+        return map[mode]
+
 class XspressDetectorStr:
     STATUS                       = "status"
     STATUS_SENSOR                = "sensor"
@@ -122,6 +136,7 @@ class XspressDetectorStr:
     CONFIG_ADAPTER_CONNECTED     = "connected"
     CONFIG_ADAPTER_USERNAME      = "username"
     CONFIG_ADAPTER_CONFIG_RAW    = "config_raw"
+    CONFIG_ADAPTER_DEBUG_LEVEL   = "debug_level"
 
     CONFIG_APP                   = "app"
     CONFIG_APP_SHUTDOWN          = "shutdow"
@@ -149,6 +164,7 @@ class XspressDetectorStr:
     CONFIG_XSP_NUM_IMAGES        = "num_images" # so only "num_images" is used
 
     CONFIG_XSP_MODE                  = "mode"
+    CONFIG_XSP_MODE_CONTROL          = "mode_control"
     CONFIG_XSP_SCA5_LOW              = "sca5_low_lim"
     CONFIG_XSP_SCA5_HIGH             = "sca5_high_lim"
     CONFIG_XSP_SCA6_LOW              = "sca6_low_lim"
@@ -178,7 +194,8 @@ class XspressDetectorStr:
     CONFIG_CMD_START             = "start"
     CONFIG_CMD_STOP              = "stop"
     CONFIG_CMD_TRIGGER           = "trigger"
-    CONFIG_CMD_ACQUIRE           = "acquire"
+    CONFIG_CMD_START_ACQUISITION = "start_acquisition"
+    CONFIG_CMD_STOP_ACQUISITION  = "stop_acquisition"
 
     VERSION                      = "version"
     VERSION_XSPRESS_DETECTOR     = "xspress-detector"
@@ -197,19 +214,20 @@ class NotAcknowledgeException(Exception):
 
 class XspressDetector(object):
 
-    def __init__(self, ip: str, port: int, dubug=logging.ERROR):
-        logging.getLogger().setLevel(logging.DEBUG)
+    def __init__(self, ip: str, port: int, debug_level=logging.INFO):
+        self.logger = logging.getLogger()
+        self.logger.setLevel(debug_level)
 
         self.endpoint = ENDPOINT_TEMPLATE.format("0.0.0.0", 12000)
         self.start_time = datetime.now()
         self.username = getpass.getuser()
         self.config_raw : dict = {}
 
-        self._async_client = XspressClient(ip, port, callback=self.on_recv_callback)
-        self._io_client = XspressClient(ip, port, callback=None)
+        self._callback_client = CallbackClient(ip, port, self.on_recv_callback)
+        self._async_client = AsyncClient(ip, port)
         self.timeout = 1
         self.xsp_connected: bool = False
-        self.sched = AuotoPeriodicCallback(self.read_config, self._async_client.is_connected, UPDATE_PARAMS_PERIOD_SECONDS)
+        self.sched = AuotoPeriodicCallback(self.read_config, self._callback_client.is_connected, UPDATE_PARAMS_PERIOD_SECONDS)
 
         # root level parameter tree members
         self.ctr_endpoint = ENDPOINT_TEMPLATE.format(ip, port)
@@ -236,14 +254,13 @@ class XspressDetector(object):
 
         # daq parameter tree members
         self.daq_enabled : bool = False
-        self.daq_endpoints : list[str] = []
+        self.endpoints : list[str] = [] # daq endpoints
 
         # status parameter tree members
         self.acquisition_complete : bool = False
         self.frames_acquired : int = 0
 
         self.mode: str = "" # 'spectrum' or 'list' for readback
-        self.mode_control : int = 0 # 0 == 'spectrum' else 'list'
 
         self.sca5_low_lim : list[int] = []
         self.sca5_high_lim : list[int] = []
@@ -296,15 +313,16 @@ class XspressDetector(object):
             XspressDetectorStr.CONFIG_DAQ :
             {
                 XspressDetectorStr.CONFIG_DAQ_ENABLED :          (lambda: self.daq_enabled, partial(self._set, 'daq_enabled')),
-                XspressDetectorStr.CONFIG_DAQ_ZMQ_ENDPOINTS :    (lambda: self.daq_endpoints, partial(self._set, 'daq_endpoints')),
+                XspressDetectorStr.CONFIG_DAQ_ZMQ_ENDPOINTS :    (lambda: self.endpoints, partial(self._set, 'endpoints')),
             },
             XspressDetectorStr.CONFIG_ADAPTER : {
                 XspressDetectorStr.CONFIG_ADAPTER_START_TIME:     (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
                 XspressDetectorStr.CONFIG_ADAPTER_UP_TIME:        (lambda: str(datetime.now() - self.start_time), {}),
-                XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (self._async_client.is_connected, {}),
+                XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (self._callback_client.is_connected, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_USERNAME:       (lambda: self.username, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_SCAN:           (self.sched.get_time, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_CONFIG_RAW:     (lambda: self.config_raw, {}),
+                XspressDetectorStr.CONFIG_ADAPTER_DEBUG_LEVEL:     (lambda: self.logger.level, {}),
             },
             XspressDetectorStr.STATUS : {
                 XspressDetectorStr.STATUS_SENSOR : {
@@ -391,6 +409,10 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_APP_CTRL_ENDPOINT: (None, partial(self._put, MessageType.CONFIG_APP, XspressDetectorStr.CONFIG_APP_CTRL_ENDPOINT), {}),
                 XspressDetectorStr.CONFIG_APP_SHUTDOWN: (None, partial(self._put, MessageType.CONFIG_APP, XspressDetectorStr.CONFIG_APP_SHUTDOWN), {}),
             },
+            XspressDetectorStr.CONFIG_DAQ :
+            {
+                XspressDetectorStr.CONFIG_DAQ_ENABLED : (None, partial(self._put, MessageType.CONFIG_APP, XspressDetectorStr.CONFIG_APP_DEBUG), {}),
+            },
 
             XspressDetectorStr.CONFIG_REQUEST: (None, self.read_config, {}),
             XspressDetectorStr.CONFIG_ADAPTER :
@@ -398,10 +420,11 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_ADAPTER_UPDATE: (None, self.do_updates, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_SCAN: (None, self.sched.set_time, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_RESET: (None, self.reset, {}),
+                XspressDetectorStr.CONFIG_ADAPTER_DEBUG_LEVEL: (None, self.logger.setLevel, {}),
             },
             XspressDetectorStr.CONFIG_XSP :
             {
-                XspressDetectorStr.CONFIG_XSP_MODE : (None, self.set_mode, {}),
+                XspressDetectorStr.CONFIG_XSP_MODE_CONTROL : (None, self.set_mode, {}),
 
                 XspressDetectorStr.CONFIG_XSP_NUM_CARDS : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_NUM_CARDS), {}),
                 XspressDetectorStr.CONFIG_XSP_NUM_TF : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_NUM_TF), {}),
@@ -432,12 +455,13 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_CMD_START : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START)),
                 XspressDetectorStr.CONFIG_CMD_STOP : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_STOP)),
                 XspressDetectorStr.CONFIG_CMD_TRIGGER : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_TRIGGER)),
-                XspressDetectorStr.CONFIG_CMD_ACQUIRE : (None, self.acquire)
+                XspressDetectorStr.CONFIG_CMD_START_ACQUISITION : (None, partial(self.acquire, 1)),
+                XspressDetectorStr.CONFIG_CMD_STOP_ACQUISITION : (None, partial(self.acquire, 0)),
             },
         }
         self.put_parameter_tree = ParameterTree(self.put_tree)
 
-    async def acquire(self, value):
+    async def acquire(self, value, *unused):
         if value:
             return await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START, 1)
         else:
@@ -460,14 +484,14 @@ class XspressDetector(object):
         setattr(self, attr_name, value)
 
     async def _put(self, message_type: MessageType, config_str: str,  value: any):
-        logging.debug(debug_method())
-        if not self._io_client.is_connected():
+        self.logger.debug(debug_method())
+        if not self._async_client.is_connected():
             raise ConnectionError("Control server is not connected! Check if it is running and tcp endpoint is configured correctly")
         if message_type == MessageType.CONFIG_ROOT:
             msg = self._build_message_single(config_str, value)
         else:
             msg = self._build_message(message_type, {config_str:value})
-        resp = await self._io_client.send_recv(msg)
+        resp = await self._async_client.send_recv(msg)
         return resp
 
     def put(self, path: str, data):
@@ -475,11 +499,11 @@ class XspressDetector(object):
             self.put_parameter_tree.set(path, data)
             return {'async_message sent': None}
         except ParameterTreeError as e:
-            logging.error(f"parameter_tree error: {e}")
+            self.logger.error(f"parameter_tree error: {e}")
             raise XspressDetectorException(e)
 
     async def put_array(self, path, data):
-        logging.error(debug_method())
+        self.logger.error(debug_method())
         path = path.split("/")
         index = int(path[-1])
         array_name = path[-2]
@@ -488,7 +512,7 @@ class XspressDetector(object):
         print(arr)
         arr[index] = data
         msg = self._build_message_single(sub_path, {array_name: arr})
-        resp : IpcMessage = await self._io_client.send_recv(msg)
+        resp : IpcMessage = await self._async_client.send_recv(msg)
         if resp.get_msg_type() == resp.NACK:
             raise NotAcknowledgeException(f"failed to set {data} to {path} on the control server:\nMessge recieved: {resp}")
         self.__dict__[array_name] = arr
@@ -516,15 +540,15 @@ class XspressDetector(object):
         try:
             return self.parameter_tree.get(path)
         except ParameterTreeError as e:
-            logging.error(f"parameter_tree error: {e}")
+            self.logger.error(f"parameter_tree error: {e}")
             raise LookupError(e)
 
 
     def on_recv_callback(self, msg):
         BASE_PATH = ""
         data = _cast_str(msg[0])
-        logging.debug(f"queue size = {self._async_client.get_queue_size()}")
-        logging.debug(f"message recieved = {data}")
+        self.logger.debug(f"queue size = {self._callback_client.get_queue_size()}")
+        self.logger.debug(f"message recieved = {data}")
         ipc_msg : IpcMessage = IpcMessage(from_str=data)
 
         if not ipc_msg.is_valid():
@@ -541,51 +565,55 @@ class XspressDetector(object):
             try:
                 path = path.strip("/")
                 self.parameter_tree.set(path, params)
-                # logging.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
+                # self.logger.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
             except ParameterTreeError as e:
-                logging.error(e)
-                logging.warning(f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree")
+                self.logger.error(e)
+                self.logger.warning(f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree")
                 pass
         else:
             for param_name, params in params.items():
                 self._param_tree_set_recursive(f"{path}/{param_name}", params)
 
-    def configure(self, num_cards, num_tf, base_ip, max_channels, settings_path, debug):
+    def configure(self, num_cards, num_tf, base_ip, max_channels, max_spectra, settings_path, run_flags, debug):
+        self.logger.critical(debug_method())
         self.num_cards = num_cards
         self.num_tf = num_tf
         self.base_ip = base_ip
         self.max_channels = max_channels
-        self.debug = debug
+        self.max_spectra = max_spectra
         self.settings_path = settings_path
+        self.run_flags = run_flags
+        self.debug = debug
 
+        x = XspressDetectorStr
         config = {
-            "base_ip" : self.base_ip,
-            "num_cards" : self.num_cards,
-            "num_tf" : self.num_tf,
-            "max_channels" : self.max_channels,
-            "config_path" : self.settings_path,
-            "debug" : self.debug,
-            "run_flags": 2,
+            x.CONFIG_XSP_NUM_CARDS: self.num_cards,
+            x.CONFIG_XSP_NUM_TF: self.num_tf,
+            x.CONFIG_XSP_BASE_IP: self.base_ip,
+            x.CONFIG_XSP_MAX_CHANNELS: self.max_channels,
+            x.CONFIG_XSP_MAX_SPECTRA: self.max_spectra,
+            x.CONFIG_XSP_CONFIG_PATH: self.settings_path,
+            x.CONFIG_XSP_RUN_FLAGS: self.run_flags,
+            x.CONFIG_XSP_DEBUG: self.debug,
         }
         self.initial_config_msg = self._build_message(MessageType.CONFIG_XSP, config)
-        self._async_client.send_requst(self.initial_config_msg)
-
+        # self._callback_client.send(self.initial_config_msg)
         # self._connect() # uncomment this when ready to test with real XSP
         self.sched.start()
 
     def reset(self, *unused):
-        self._async_client.send_requst(self.initial_config_msg)
+        self._callback_client.send(self.initial_config_msg)
 
 
     def _connect(self):
         command = { "connect": None }
         command_message = self._build_message(MessageType.CMD, command)
 
-        self._async_client.send_requst(command_message)
+        self._callback_client.send(command_message)
         # success, _ = self._client.send_configuration(command_message, target=XspressDetectorStr.CONFIG_CMD)
         # if not success:
         #     self.connected = False
-        #     logging.error("could not connect to Xspress")
+        #     self.logger.error("could not connect to Xspress")
         #     raise XspressDetectorException("could not connect to the xspress unit")
         self.connected = True
         self._restore()
@@ -595,7 +623,7 @@ class XspressDetector(object):
         command = { "restore": None }
         command_message = self._build_message(MessageType.CMD, command)
         # success, reply =  self._client.send_configuration(command_message, target=XspressDetectorStr.CONFIG_CMD)
-        self._async_client.send_requst(command_message)
+        self._callback_client.send(command_message)
 
     def _build_message_single(self, param_str: str, value: any):
         msg = IpcMessage("cmd", "configure")
@@ -619,6 +647,6 @@ class XspressDetector(object):
         return msg
 
     def read_config(self, *unused):
-        self._async_client.send_requst(self._build_message(MessageType.REQUEST))
+        self._callback_client.send(self._build_message(MessageType.REQUEST))
 
 

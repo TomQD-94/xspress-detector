@@ -24,16 +24,17 @@ for name in dir(zmq):
 class AsyncXspressClient:
     pass
 
-class XspressClient:
+
+class AbstractClient:
     MESSAGE_ID_MAX = 2**32
 
-    def __init__(self, ip, port, callback=None):
+    def __init__(self, ip, port, callback):
         self.ip = ip
         self.port = port
         self.endpoint = ENDPOINT_TEMPLATE.format(ip, port)
         self.connected = False
-        self.send_buffer = {}
-        self.recv_buffer = {}
+        self.message_id = 0
+        self.queue_size = 0
 
         self.context = zmq.Context.instance()
         self.socket = self.context.socket(zmq.DEALER)
@@ -44,18 +45,12 @@ class XspressClient:
         io_loop = tornado.ioloop.IOLoop.current()
         self.stream = ZMQStream(self.socket, io_loop=io_loop)
         self.callback = callback
-        if callback == None:
-            self.register_on_recv_callback(self.on_recv_callback)
-        else:
-            self.register_on_recv_callback(self.callback)
-
+        self.register_on_recv_callback(self.callback)
         self.stream.on_send(self._on_send_callback)
 
         self.monitor_stream = ZMQStream(self.monitor_socket, io_loop=io_loop)
         self.monitor_stream.on_recv(self._monitor_on_recv_callback)
 
-        self.message_id = 0
-        self.queue_size = 0
 
     def _monitor_on_recv_callback(self, msg):
         msg = parse_monitor_message(msg)
@@ -76,16 +71,6 @@ class XspressClient:
         )
         return cast_bytes(identity)
 
-    def test_callback(self, msg):
-        data = _cast_str(msg[0])
-        logging.debug(f"data type = {type(data)}")
-        logging.debug(f"data = {data}")
-        ipc_msg = IpcMessage(from_str=data)
-        logging.debug(f"queue size = {self.queue_size}")
-        logging.debug(f"ZmqMessage: {msg}")
-        logging.debug(f"IpcMessage __dict__: {ipc_msg.__dict__}")
-        logging.debug(f"IpcMessage msg.params: {ipc_msg.get_params()}")
-
     def _on_send_callback(self, msg, status):
         self.queue_size += 1
 
@@ -104,26 +89,33 @@ class XspressClient:
             callback(msg, status)
         self.stream.on_send(wrap)
 
-    def send_requst(self, msg: IpcMessage):
-        n_flushed = self.stream.flush() # This is probably not needed
-        logging.debug("number of events flushed: {}".format(n_flushed))
-        msg.set_msg_id(self.message_id)
+    def get_id(self):
+        id = self.message_id
         self.message_id = (self.message_id + 1) % self.MESSAGE_ID_MAX
-        logging.info("Sending message:\n%s", msg.encode())
-        self.stream.send(cast_bytes(msg.encode()))
-        logging.error(f"queue size = {self.queue_size}")
+        return id
+
+    def is_connected(self):
+        return self.connected
+
+class AsyncClient(AbstractClient):
+
+    def __init__(self, ip, port):
+        self.send_buffer = {}
+        self.recv_buffer = {}
+
+        super().__init__(ip, port, self._on_recv_callback)
 
     async def send_recv(self, msg: IpcMessage, timeout=1):
-        id = self.message_id
         if not self.connected:
-            raise ConnectionError(f"XspressClient.send_recv: Failed to send msg {id}. ZMQ socket not connected.\nmessage: {msg.encode()}")
+            raise ConnectionError(f"AsyncClient.send_recv: Failed to send msg {id}. ZMQ socket not connected.\nmessage: {msg.encode()}")
+        id = self.get_id()
         msg.set_msg_id(id)
-        self.message_id = (self.message_id + 1) % self.MESSAGE_ID_MAX
         self.send_buffer[id] = msg
         logging.info("Sending message:\n%s", msg.encode())
         self.stream.send(cast_bytes(msg.encode()))
+
         time_elapsed = 0
-        time_to_sleep = 0.005
+        time_to_sleep = 0.001
         while time_elapsed < timeout:
             await asyncio.sleep(time_to_sleep)
             time_elapsed +=time_to_sleep
@@ -132,9 +124,9 @@ class XspressClient:
                 self.send_buffer.pop(id)
                 return self.recv_buffer.pop(id)
         self.send_buffer.pop(id)
-        raise TimeoutError(f"XspressClient.send_recv timed out on message: {id}.")
+        raise TimeoutError(f"AsyncClient.send_recv timed out on message: {id}.")
 
-    def on_recv_callback(self, msg):
+    def _on_recv_callback(self, msg):
         data = _cast_str(msg[0])
         logging.debug(f"message recieved = {data}")
         ipc_msg : IpcMessage = IpcMessage(from_str=data)
@@ -142,5 +134,15 @@ class XspressClient:
         if id in self.send_buffer: # else it's already timed out 
             self.recv_buffer[id] = ipc_msg
 
-    def is_connected(self):
-        return self.connected
+class CallbackClient(AbstractClient):
+
+    def __init__(self, ip, port, callback):
+        super().__init__(ip, port, callback)
+
+    def send(self, msg: IpcMessage):
+        n_flushed = self.stream.flush() # This is probably not needed
+        logging.debug("number of events flushed: {}".format(n_flushed))
+        msg.set_msg_id(self.get_id())
+        logging.info("Sending message:\n%s", msg.encode())
+        self.stream.send(cast_bytes(msg.encode()))
+        logging.error(f"queue size = {self.queue_size}")
