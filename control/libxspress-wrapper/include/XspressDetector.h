@@ -56,7 +56,7 @@ public:
   int connect();
   int connect_mca_mode();
   int connect_list_mode();
-  int checkConnected();
+  bool checkConnected();
   int disconnect();
   int setupChannels();
   int enableDAQ();
@@ -135,6 +135,14 @@ public:
   std::vector<double> getLiveInpEst();
   bool getXspAcquiring();
   uint32_t getXspFramesRead();
+  std::vector<float> getTemperature0();
+  std::vector<float> getTemperature1();
+  std::vector<float> getTemperature2();
+  std::vector<float> getTemperature3();
+  std::vector<float> getTemperature4();
+  std::vector<float> getTemperature5();
+  std::vector<int32_t> getXspFEMFramesRead();
+  std::vector<int32_t> getXspFEMDroppedFrames();
   
 private:
   /** libxspress wrapper object */

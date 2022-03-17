@@ -6,6 +6,7 @@
 #include "XspressProcessPlugin.h"
 #include "FrameProcessorDefinitions.h"
 #include "XspressDefinitions.h"
+#include "DebugLevelLogger.h"
 
 namespace FrameProcessor {
 
@@ -14,6 +15,8 @@ const std::string XspressProcessPlugin::CONFIG_ACQ_ID               = "acq_id";
 const std::string XspressProcessPlugin::CONFIG_PROCESS              = "process";
 const std::string XspressProcessPlugin::CONFIG_PROCESS_NUMBER       = "number";
 const std::string XspressProcessPlugin::CONFIG_PROCESS_RANK         = "rank";
+
+const std::string XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME       = "live_view";
 
 const std::string XspressProcessPlugin::CONFIG_FRAMES               = "frames";
 const std::string XspressProcessPlugin::CONFIG_DTC_FLAGS            = "dtc/flags";
@@ -117,7 +120,8 @@ XspressProcessPlugin::XspressProcessPlugin() :
   current_block_start_(0),
   concurrent_processes_(1),
   concurrent_rank_(0),
-  acq_id_("")
+  acq_id_(""),
+  live_view_name_("")
 {
   // Setup logging for the class
   logger_ = Logger::getLogger("FP.XspressProcessPlugin");
@@ -147,6 +151,12 @@ void XspressProcessPlugin::configure(OdinData::IpcMessage& config, OdinData::Ipc
     this->acq_id_ = config.get_param<std::string>(XspressProcessPlugin::CONFIG_ACQ_ID);
     LOG4CXX_INFO(logger_, "Acquisition ID set to " << this->acq_id_);
   }
+
+  // Check for the live view plugin name
+  if (config.has_param(XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME)) {
+    this->live_view_name_ = config.get_param<std::string>(XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME);
+    LOG4CXX_INFO(logger_, "Live View destination name set to " << this->live_view_name_);
+  }
 }
 
 void XspressProcessPlugin::requestConfiguration(OdinData::IpcMessage& reply)
@@ -158,6 +168,7 @@ void XspressProcessPlugin::requestConfiguration(OdinData::IpcMessage& reply)
   reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_PROCESS + "/" +
                   XspressProcessPlugin::CONFIG_PROCESS_RANK, this->concurrent_rank_);
   reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_ACQ_ID, this->acq_id_);
+  reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME, this->live_view_name_);
 }
 
 /**
@@ -283,58 +294,78 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   char *raw_sca_ptr = frame_bytes;
   raw_sca_ptr += sizeof(FrameHeader); 
   uint32_t *sca_ptr = (uint32_t *)raw_sca_ptr;
-//  for (int cindex = 0; cindex < num_channels_; cindex++){
-//    LOG4CXX_INFO(logger_, "Scalers " << sca_ptr[0] <<
-//                          " " << sca_ptr[1] <<
-//                          " " << sca_ptr[2] <<
-//                          " " << sca_ptr[3] <<
-//                          " " << sca_ptr[4] <<
-//                          " " << sca_ptr[5] <<
-//                          " " << sca_ptr[6] <<
-//                          " " << sca_ptr[7] <<
-//                          " " << sca_ptr[8]);
-//    sca_ptr += 9;
-//  }
+  char *raw_dtc_ptr = frame_bytes;
+  raw_dtc_ptr += (sizeof(FrameHeader) + (num_scalar_values*sizeof(uint32_t)));
+  double *dtc_ptr = (double *)raw_dtc_ptr;
+  char *raw_inp_est_ptr = frame_bytes;
+  raw_inp_est_ptr += (sizeof(FrameHeader) + (num_scalar_values*sizeof(uint32_t)) + (num_dtc_factors*sizeof(double)));
+  double *inp_est_ptr = (double *)raw_inp_est_ptr;
 
+  for (int cindex = 0; cindex < num_channels_; cindex++){
+    LOG4CXX_DEBUG_LEVEL(3, logger_, "DTC factor: " << dtc_ptr[cindex]);
+    LOG4CXX_DEBUG_LEVEL(3, logger_, "Input estimate: " << inp_est_ptr[cindex]);
+    LOG4CXX_DEBUG_LEVEL(3, logger_, "Scalers " << sca_ptr[0 + (cindex*9)] <<
+                           " " << sca_ptr[1 + (cindex*9)] <<
+                           " " << sca_ptr[2 + (cindex*9)] <<
+                           " " << sca_ptr[3 + (cindex*9)] <<
+                           " " << sca_ptr[4 + (cindex*9)] <<
+                           " " << sca_ptr[5 + (cindex*9)] <<
+                           " " << sca_ptr[6 + (cindex*9)] <<
+                           " " << sca_ptr[7 + (cindex*9)] <<
+                           " " << sca_ptr[8 + (cindex*9)]);
+  }
 
-            rapidjson::Document meta_document;
-            meta_document.SetObject();
+  rapidjson::Document meta_document;
+  meta_document.SetObject();
 
-            // Add Acquisition ID
-            rapidjson::Value key_acq_id("acqID", meta_document.GetAllocator());
-            rapidjson::Value value_acq_id;
-            value_acq_id.SetString(acq_id_.c_str(), acq_id_.size(), meta_document.GetAllocator());
-            meta_document.AddMember(key_acq_id, value_acq_id, meta_document.GetAllocator());
-            // Add rank
-            rapidjson::Value key_rank("rank", meta_document.GetAllocator());
-            rapidjson::Value value_rank;
-            value_rank.SetInt(concurrent_rank_);
-            meta_document.AddMember(key_rank, value_rank, meta_document.GetAllocator());
-            // Add number of data points
-            rapidjson::Value key_qty("qty_scalars", meta_document.GetAllocator());
-            rapidjson::Value value_qty;
-            value_qty.SetInt(num_scalar_values);
-            meta_document.AddMember(key_qty, value_qty, meta_document.GetAllocator());
-            // Add ts index
-            rapidjson::Value key_index("channel_index", meta_document.GetAllocator());
-            rapidjson::Value value_index;
-            value_index.SetInt(first_channel_index);
-            meta_document.AddMember(key_index, value_index, meta_document.GetAllocator());
+  // Add Acquisition ID
+  rapidjson::Value key_acq_id("acqID", meta_document.GetAllocator());
+  rapidjson::Value value_acq_id;
+  value_acq_id.SetString(acq_id_.c_str(), acq_id_.size(), meta_document.GetAllocator());
+  meta_document.AddMember(key_acq_id, value_acq_id, meta_document.GetAllocator());
+  // Add rank
+  rapidjson::Value key_rank("rank", meta_document.GetAllocator());
+  rapidjson::Value value_rank;
+  value_rank.SetInt(concurrent_rank_);
+  meta_document.AddMember(key_rank, value_rank, meta_document.GetAllocator());
+  // Add number of data points
+  rapidjson::Value key_qty("qty_scalars", meta_document.GetAllocator());
+  rapidjson::Value value_qty;
+  value_qty.SetInt(num_scalar_values);
+  meta_document.AddMember(key_qty, value_qty, meta_document.GetAllocator());
+  // Add channel index
+  rapidjson::Value key_index("channel_index", meta_document.GetAllocator());
+  rapidjson::Value value_index;
+  value_index.SetInt(first_channel_index);
+  meta_document.AddMember(key_index, value_index, meta_document.GetAllocator());
+  // Add number of channels
+  rapidjson::Value key_num("number_of_channels", meta_document.GetAllocator());
+  rapidjson::Value value_num;
+  value_num.SetInt(header->num_channels);
+  meta_document.AddMember(key_num, value_num, meta_document.GetAllocator());
 
-            rapidjson::StringBuffer buffer;
-            rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-            meta_document.Accept(writer);
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  meta_document.Accept(writer);
 
-            LOG4CXX_INFO(logger_, "Publishing MCA scalars: " << buffer.GetString());
-            this->publish_meta("xspress",
-                               "xspress_scalars",
-                               sca_ptr,
-                               num_scalar_values * sizeof(uint32_t),
-                               buffer.GetString());
+  LOG4CXX_DEBUG_LEVEL(3, logger_, "Publishing MCA scalars: " << buffer.GetString());
+  this->publish_meta("xspress",
+                      "xspress_scalars",
+                      sca_ptr,
+                      num_scalar_values * sizeof(uint32_t),
+                      buffer.GetString());
 
+  this->publish_meta("xspress",
+                      "xspress_dtc",
+                      dtc_ptr,
+                      num_dtc_factors * sizeof(double),
+                      buffer.GetString());
 
-
-
+  this->publish_meta("xspress",
+                      "xspress_inp_est",
+                      inp_est_ptr,
+                      num_inp_est * sizeof(double),
+                      buffer.GetString());
 
   char *mca_ptr = frame_bytes;
   mca_ptr += (sizeof(FrameHeader) + 
@@ -343,17 +374,27 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
              (num_inp_est*sizeof(double))
              );
 
+  // Create the live view frame and push it
+  dimensions_t live_dims;
+  live_dims.push_back(num_channels_);
+  live_dims.push_back(header->num_aux);
+  live_dims.push_back(header->num_energy_bins);
+  FrameMetaData live_metadata(frame_id, "live", raw_32bit, "", live_dims);
+  boost::shared_ptr<Frame> live_frame(new DataBlockFrame(live_metadata, (mca_size*num_channels_)));
+  memcpy(live_frame->get_data_ptr(), mca_ptr, (mca_size*num_channels_));
+  // Set the chunking size to dimension of 1
+  live_frame->set_outer_chunk_size(1);
+  // Push out the live MCA data to the live view plugin only
+  this->push(live_view_name_, live_frame);
+
   for (int index = 0; index < num_channels_; index++){
     memory_ptrs_[index]->add_frame(frame_id, mca_ptr);
     mca_ptr += mca_size;
 
     // Check if the buffer is full
     if (memory_ptrs_[index]->check_full()){
-//        LOG4CXX_INFO(logger_, "Memory block full");
-
         // Create the frame and push it
         dimensions_t mca_dims;
-//        mca_dims.push_back(frames_per_block_);
         mca_dims.push_back(header->num_aux);
         mca_dims.push_back(header->num_energy_bins);
         std::stringstream ss;
@@ -373,7 +414,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
     } else {
       // Check if we are writing out the last block which is not full size
       if (frame_id == (num_frames_-1)){
-        LOG4CXX_INFO(logger_, "num_frames_ - 1: " << (num_frames_-1));
+        LOG4CXX_DEBUG_LEVEL(3, logger_, "num_frames_ - 1: " << (num_frames_-1));
         dimensions_t mca_dims;
         mca_dims.push_back(header->num_aux);
         mca_dims.push_back(header->num_energy_bins);
@@ -391,59 +432,10 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
         this->push(mca_frame);
         // Reset the memory block
         memory_ptrs_[index]->reset();
-        LOG4CXX_INFO(logger_, "Pushed partially full frame as required frame count reached");
+        LOG4CXX_DEBUG_LEVEL(3, logger_, "Pushed partially full frame as required frame count reached");
       }
     }
   }
 }
-
-/*
-        size_t mcaDataSize = header_->numEnergy * header_->numAux * header_->numChannels * sizeof(uint32_t);
-        uint32_t *iSCA = reinterpret_cast<uint32_t *>(frameBytes + sizeof(FrameHeader) + mcaDataSize);
-
-        double clockPeriod = header_->clockPeriod;
-        double deadtimeEnergy = header_->deadtimeEnergy;
-
-        dimensions_t mca_dims;
-        // set things from data frame
-        mca_dims.push_back(header_->numChannels);
-        mca_dims.push_back(header_->numAux);
-        mca_dims.push_back(header_->numEnergy);
-        frame->meta_data().set_dimensions(mca_dims);
-        frame->meta_data().set_data_type(XSPRESS_DATA_TYPE);
-        frame->meta_data().set_dataset_name("mca");
-        frame->set_image_offset(sizeof(FrameHeader));
-        frame->set_image_size(mcaDataSize);
-        frame->set_frame_number(header_->frameNumber);
-        
-        frame->meta_data().set_acquisition_ID("");
-
-        FrameProcessor::DataType scaDataType = this->dtcEnabled ? raw_64bit : XSPRESS_DATA_TYPE;
-
-        dimensions_t scaler_dims;
-        scaler_dims.push_back(header_->numChannels);
-        scaler_dims.push_back(XSP3_SW_NUM_SCALERS);
-        FrameMetaData scaler_metadata(header_->frameNumber, "sca", scaDataType, "", scaler_dims);
-        // TODO: FIX, how can we allocate or request new blocks?	
-        size_t scalerSize = XSP3_SW_NUM_SCALERS*header_->numChannels * (this->dtcEnabled ? sizeof(double) : sizeof(uint32_t));
-        boost::shared_ptr <Frame> scaler_frame(new DataBlockFrame(scaler_metadata, scalerSize));
-
-        if (this->dtcEnabled)
-        {
-            auto dtcFactors = new double[header_->numChannels];
-            auto corrected = new double[header_->numChannels];
-            calculateDeadtimeCorrection(header_->numChannels, clockPeriod, deadtimeEnergy, iSCA, dtcFactors, corrected);
-            deadtimeCorrectScalers(header_->numChannels, iSCA, static_cast<double *>(scaler_frame->get_data_ptr()), dtcFactors, corrected, clockPeriod);
-        }
-        else
-        {
-            memcpy(scaler_frame->get_data_ptr(), iSCA, scalerSize);
-        }
-        this->push(frame);
-        this->push(scaler_frame);
-        LOG4CXX_TRACE(logger_, "Got frame number: " << header_->frameNumber);
-    }
-*/
-
 
 }

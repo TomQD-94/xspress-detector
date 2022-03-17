@@ -26,6 +26,7 @@ using namespace log4cxx;
 using namespace log4cxx::helpers;
 
 #define NUMBER_OF_SCALARS 9
+#define NUMBER_OF_TEMPERATURES 6
 
 namespace Xspress
 {
@@ -133,12 +134,17 @@ private:
 
 
   static const std::string STATUS;
+  static const std::string STATUS_CONNECTED;
   static const std::string STATUS_ACQ_COMPLETE;
   static const std::string STATUS_FRAMES;
+  static const std::string STATUS_CHANNEL_FRAMES;
+  static const std::string STATUS_FEM_DROPPED_FRAMES;
 
   static const std::string STATUS_LIVE_SCALAR[NUMBER_OF_SCALARS];
   static const std::string STATUS_LIVE_DTC;
   static const std::string STATUS_LIVE_INP_EST;
+
+  static const std::string STATUS_TEMPERATURE[NUMBER_OF_TEMPERATURES];
 
   void setupControlInterface(const std::string& ctrlEndpointString);
   void closeControlInterface();
