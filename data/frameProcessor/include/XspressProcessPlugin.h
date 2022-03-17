@@ -84,6 +84,7 @@ private:
         uint32_t concurrent_processes_;
         uint32_t concurrent_rank_;
         std::string acq_id_;
+        std::string live_view_name_;
 
 
         std::vector<boost::shared_ptr<XspressMemoryBlock> > memory_ptrs_;
@@ -94,6 +95,8 @@ private:
         static const std::string CONFIG_PROCESS;
         static const std::string CONFIG_PROCESS_NUMBER;
         static const std::string CONFIG_PROCESS_RANK;
+
+        static const std::string CONFIG_LIVE_VIEW_NAME;
 
         static const std::string CONFIG_FRAMES;
 

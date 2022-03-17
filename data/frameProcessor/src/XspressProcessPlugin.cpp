@@ -16,6 +16,8 @@ const std::string XspressProcessPlugin::CONFIG_PROCESS              = "process";
 const std::string XspressProcessPlugin::CONFIG_PROCESS_NUMBER       = "number";
 const std::string XspressProcessPlugin::CONFIG_PROCESS_RANK         = "rank";
 
+const std::string XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME       = "live_view";
+
 const std::string XspressProcessPlugin::CONFIG_FRAMES               = "frames";
 const std::string XspressProcessPlugin::CONFIG_DTC_FLAGS            = "dtc/flags";
 const std::string XspressProcessPlugin::CONFIG_DTC_PARAMS           = "dtc/params";
@@ -118,7 +120,8 @@ XspressProcessPlugin::XspressProcessPlugin() :
   current_block_start_(0),
   concurrent_processes_(1),
   concurrent_rank_(0),
-  acq_id_("")
+  acq_id_(""),
+  live_view_name_("")
 {
   // Setup logging for the class
   logger_ = Logger::getLogger("FP.XspressProcessPlugin");
@@ -148,6 +151,12 @@ void XspressProcessPlugin::configure(OdinData::IpcMessage& config, OdinData::Ipc
     this->acq_id_ = config.get_param<std::string>(XspressProcessPlugin::CONFIG_ACQ_ID);
     LOG4CXX_INFO(logger_, "Acquisition ID set to " << this->acq_id_);
   }
+
+  // Check for the live view plugin name
+  if (config.has_param(XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME)) {
+    this->live_view_name_ = config.get_param<std::string>(XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME);
+    LOG4CXX_INFO(logger_, "Live View destination name set to " << this->live_view_name_);
+  }
 }
 
 void XspressProcessPlugin::requestConfiguration(OdinData::IpcMessage& reply)
@@ -159,6 +168,7 @@ void XspressProcessPlugin::requestConfiguration(OdinData::IpcMessage& reply)
   reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_PROCESS + "/" +
                   XspressProcessPlugin::CONFIG_PROCESS_RANK, this->concurrent_rank_);
   reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_ACQ_ID, this->acq_id_);
+  reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME, this->live_view_name_);
 }
 
 /**
@@ -363,6 +373,19 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
              (num_dtc_factors*sizeof(double)) + 
              (num_inp_est*sizeof(double))
              );
+
+  // Create the live view frame and push it
+  dimensions_t live_dims;
+  live_dims.push_back(num_channels_);
+  live_dims.push_back(header->num_aux);
+  live_dims.push_back(header->num_energy_bins);
+  FrameMetaData live_metadata(frame_id, "live", raw_32bit, "", live_dims);
+  boost::shared_ptr<Frame> live_frame(new DataBlockFrame(live_metadata, (mca_size*num_channels_)));
+  memcpy(live_frame->get_data_ptr(), mca_ptr, (mca_size*num_channels_));
+  // Set the chunking size to dimension of 1
+  live_frame->set_outer_chunk_size(1);
+  // Push out the live MCA data to the live view plugin only
+  this->push(live_view_name_, live_frame);
 
   for (int index = 0; index < num_channels_; index++){
     memory_ptrs_[index]->add_frame(frame_id, mca_ptr);
