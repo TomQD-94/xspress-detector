@@ -48,6 +48,7 @@ public:
   void handleCtrlChannel();
   void provideStatus(OdinData::IpcMessage& reply);
   void provideVersion(OdinData::IpcMessage& reply);
+  void provideAPIVersion(OdinData::IpcMessage& reply);
   void configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void configureApp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
   void configureXsp(OdinData::IpcMessage& config, OdinData::IpcMessage& reply);
@@ -60,6 +61,9 @@ public:
   void shutdown();
 
 private:
+  /** Constant for control wrapper API version **/
+  static const std::string API;
+
   /** Configuration constants for application control **/
   static const std::string CONFIG_APP;
   /** Configuration constant to shutdown the xspress controller **/

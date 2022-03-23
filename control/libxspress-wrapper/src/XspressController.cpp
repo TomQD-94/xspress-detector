@@ -11,8 +11,16 @@
 #include "DebugLevelLogger.h"
 #include "version.h"
 
+// API version numbers for XSP control wrapper interface
+// After first release any changes to the API should result
+// in an API increment
+#define XSP_API_MAJOR 0
+#define XSP_API_MINOR 1
+#define XSP_API_PATCH 0
+
 namespace Xspress
 {
+const std::string XspressController::API                              = "api";
 
 const std::string XspressController::CONFIG_APP                       = "app";
 const std::string XspressController::CONFIG_APP_SHUTDOWN              = "shutdown";
@@ -344,6 +352,17 @@ void XspressController::provideVersion(OdinData::IpcMessage& reply)
   reply.set_param("version/xspress-detector/patch", XSPRESS_DETECTOR_VERSION_PATCH);
   reply.set_param("version/xspress-detector/short", std::string(XSPRESS_DETECTOR_VERSION_STR_SHORT));
   reply.set_param("version/xspress-detector/full", std::string(XSPRESS_DETECTOR_VERSION_STR)); 
+}
+
+/** Provide API information to requesting clients.
+ *
+ * @param[in,out] reply - response IPC message to be populated with version information
+ */
+void XspressController::provideAPIVersion(OdinData::IpcMessage& reply)
+{
+  std::stringstream ss;
+  ss << XSP_API_MAJOR << "." << XSP_API_MINOR << "." << XSP_API_PATCH;
+  reply.set_param(XspressController::API, ss.str());
 }
 
 /**
@@ -906,6 +925,7 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
   }
   provideStatus(reply);
   provideVersion(reply);
+  provideAPIVersion(reply);
 }
 
 /**
