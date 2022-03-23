@@ -84,58 +84,66 @@ std::string LibXspressWrapper::getErrorString()
 
 void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code)
 {
+  checkErrorCode(prefix, code, false);
+}
+
+void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code, bool add_xsp_error)
+{
   std::stringstream err;
   switch (code){
     case XSP3_OK:
       // No error here, pass through
       break;
     case XSP3_ERROR:
-      err << prefix << " error [" << code << "] XSP3_ERROR: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_ERROR";
       break;
     case XSP3_INVALID_PATH:
-      err << prefix << " error [" << code << "] XSP3_INVALID_PATH: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_INVALID_PATH";
       break;
     case XSP3_ILLEGAL_CARD:
-      err << prefix << " error [" << code << "] XSP3_ILLEGAL_CARD: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_ILLEGAL_CARD";
       break;
     case XSP3_ILLEGAL_SUBPATH:
-      err << prefix << " error [" << code << "] XSP3_ILLEGAL_SUBPATH: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_ILLEGAL_SUBPATH";
       break;
     case XSP3_INVALID_DMA_STREAM:
-      err << prefix << " error [" << code << "] XSP3_INVALID_DMA_STREAM: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_INVALID_DMA_STREAM";
       break;
     case XSP3_RANGE_CHECK:
-      err << prefix << " error [" << code << "] XSP3_RANGE_CHECK: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_RANGE_CHECK";
       break;
     case XSP3_INVALID_SCOPE_MOD:
-      err << prefix << " error [" << code << "] XSP3_INVALID_SCOPE_MOD: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_INVALID_SCOPE_MOD";
       break;
     case XSP3_OUT_OF_MEMORY:
-      err << prefix << " error [" << code << "] XSP3_OUT_OF_MEMORY: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_OUT_OF_MEMORY";
       break;
     case XSP3_ERR_DEV_NOT_FOUND:
-      err << prefix << " error [" << code << "] XSP3_ERR_DEV_NOT_FOUND: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_ERR_DEV_NOT_FOUND";
       break;
     case XSP3_CANNOT_OPEN_FILE:
-      err << prefix << " error [" << code << "] XSP3_CANNOT_OPEN_FILE: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_CANNOT_OPEN_FILE";
       break;
     case XSP3_FILE_READ_FAILED:
-      err << prefix << " error [" << code << "] XSP3_FILE_READ_FAILED: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_FILE_READ_FAILED";
       break;
     case XSP3_FILE_WRITE_FAILED:
-      err << prefix << " error [" << code << "] XSP3_FILE_WRITE_FAILED: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_FILE_WRITE_FAILED";
       break;
     case XSP3_FILE_RENAME_FAILED:
-      err << prefix << " error [" << code << "] XSP3_FILE_RENAME_FAILED: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_FILE_RENAME_FAILED";
       break;
     case XSP3_LOG_FILE_MISSING:
-      err << prefix << " error [" << code << "] XSP3_LOG_FILE_MISSING: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] XSP3_LOG_FILE_MISSING";
       break;
     default:
       // Uknown error code here
-      err << prefix << " error [" << code << "] Unknown error code: " << xsp3_get_error_message();
+      err << prefix << " error [" << code << "] Unknown error code";
   }
   if (code != XSP3_OK){
+    if (add_xsp_error){
+      err << ": " << xsp3_get_error_message();
+    }
     setErrorString(err.str());
   }
 }
@@ -1080,7 +1088,7 @@ int LibXspressWrapper::validate_histogram_dims(uint32_t num_eng,
 
   if (status == XSP_STATUS_OK){
     if ((xsp_status = xsp3_get_format(xsp_handle_, start_chan, &nbins_eng, &nbins_aux1, &nbins_aux2, &total_tf)) < 0) {
-      checkErrorCode("xsp3_get_format", xsp_status);
+      checkErrorCode("xsp3_get_format", xsp_status, true);
       status = XSP_STATUS_ERROR;
     }
   }
@@ -1090,7 +1098,7 @@ int LibXspressWrapper::validate_histogram_dims(uint32_t num_eng,
       int ne, na1, na2, nt;
       for (c = start_chan; c < (start_chan + num_chan); c++) {
         if ((xsp_status = xsp3_get_format(xsp_handle_, c, &ne, &na1, &na2, &nt)) < 0) {
-          checkErrorCode("xsp3_get_format", xsp_status);
+          checkErrorCode("xsp3_get_format", xsp_status, true);
           status = XSP_STATUS_ERROR;
         } else {
           if (ne != nbins_eng || na1 != nbins_aux1 || na2 != nbins_aux2 || nt != total_tf) {
@@ -1159,7 +1167,7 @@ int LibXspressWrapper::set_sca_thresh(int chan, int value)
 
   xsp_status = xsp3_set_good_thres(xsp_handle_, chan, value);
   if (xsp_status != XSP3_OK) {
-    checkErrorCode("xsp3_set_good_thres", xsp_status);
+    checkErrorCode("xsp3_set_good_thres", xsp_status, true);
     status = XSP_STATUS_ERROR;
   }
   return status;

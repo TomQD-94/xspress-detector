@@ -44,6 +44,7 @@ class XspressController : public boost::enable_shared_from_this<XspressControlle
 public:
   XspressController();
   virtual ~XspressController();
+  void setError(const std::string& error);
   void handleCtrlChannel();
   void provideStatus(OdinData::IpcMessage& reply);
   void provideVersion(OdinData::IpcMessage& reply);
@@ -134,6 +135,8 @@ private:
 
 
   static const std::string STATUS;
+  static const std::string STATUS_ERROR;
+  static const std::string STATUS_STATE;
   static const std::string STATUS_CONNECTED;
   static const std::string STATUS_ACQ_COMPLETE;
   static const std::string STATUS_FRAMES;
@@ -179,6 +182,10 @@ private:
   OdinData::IpcChannel                                            ctrlChannel_;
   /** The Xspress hardware wrapper object */
   XspressDetector                                                 xsp_;
+  /** Error string */
+  std::string                                                     error_;
+  /** State string */
+  std::string                                                     state_;
 };
 
 } /* namespace Xspress */

@@ -76,6 +76,7 @@ public:
   void setErrorString(const std::string& error);
   std::string getErrorString();
   void checkErrorCode(const std::string& prefix, int code);
+  void checkErrorCode(const std::string& prefix, int code, bool add_xsp_error);
 
   int configure_mca(int num_cards,                 // Number of XSPRESS cards
                     int num_frames,                // Number of 4096 energy bin spectra timeframes

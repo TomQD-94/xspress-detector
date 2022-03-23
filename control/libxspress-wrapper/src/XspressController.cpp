@@ -72,6 +72,8 @@ const std::string XspressController::CONFIG_XSP_MODE_LIST             = XSP_MODE
 
 
 const std::string XspressController::STATUS                           = "status";
+const std::string XspressController::STATUS_ERROR                     = "error";
+const std::string XspressController::STATUS_STATE                     = "state";
 const std::string XspressController::STATUS_CONNECTED                 = "connected";
 const std::string XspressController::STATUS_ACQ_COMPLETE              = "acquisition_complete";
 const std::string XspressController::STATUS_FRAMES                    = "frames_acquired";
@@ -111,7 +113,9 @@ XspressController::XspressController() :
     ipc_context_(OdinData::IpcContext::Instance(1)),
     ctrlThread_(boost::bind(&XspressController::runIpcService, this)),
     ctrlChannelEndpoint_(""),
-    ctrlChannel_(ZMQ_ROUTER)
+    ctrlChannel_(ZMQ_ROUTER),
+    error_(""),
+    state_("")
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing XspressController");
@@ -135,6 +139,23 @@ XspressController::~XspressController()
 {
   // Make sure we shutdown cleanly if an exception was thrown
   shutdown();
+}
+
+/** Set the error message for the control wrapper
+ *
+ * If the error string is different to the existing error then
+ * a log message is recorded.
+ *
+ * @param[in] error - the error string to set
+ */
+void XspressController::setError(const std::string& error)
+{
+  if (error != error_){
+    if (error != ""){
+      LOG4CXX_ERROR(logger_, "ControlWrapper error: " << error);
+    }
+    error_ = error;
+  }
 }
 
 /** Handle an incoming configuration message.
@@ -191,9 +212,11 @@ void XspressController::handleCtrlChannel()
               << replyMsg.encode());
     }
     else {
-      LOG4CXX_ERROR(logger_, "Control thread got unexpected message: " << ctrlMsgEncoded);
-      replyMsg.set_param("error", "Invalid control message: " + ctrlMsgEncoded);
+      std::stringstream ss;
+      ss << "Invalid control message: " << ctrlMsgEncoded;
+      replyMsg.set_param("error", ss.str());
       replyMsg.set_msg_type(OdinData::IpcMessage::MsgTypeNack);
+      setError(ss.str());
     }
     ctrlChannel_.send(replyMsg.encode(), 0, clientIdentity);
   }
@@ -203,10 +226,12 @@ void XspressController::handleCtrlChannel()
   }
   catch (std::runtime_error& e)
   {
-    LOG4CXX_ERROR(logger_, "Bad control message: " << e.what());
+    std::stringstream ss;
+    ss << "Bad control message: " << std::string(e.what());
     OdinData::IpcMessage replyMsg(OdinData::IpcMessage::MsgTypeNack, OdinData::IpcMessage::MsgValCmdConfigure);
-    replyMsg.set_param<std::string>("error", std::string(e.what()));
+    replyMsg.set_param<std::string>("error", ss.str());
     replyMsg.set_msg_id(msg_id);
+    setError(ss.str());
     ctrlChannel_.send(replyMsg.encode());
   }
 }
@@ -221,6 +246,12 @@ void XspressController::handleCtrlChannel()
  */
 void XspressController::provideStatus(OdinData::IpcMessage& reply)
 {
+  // Return the current error status
+  reply.set_param(XspressController::STATUS + "/" +
+    XspressController::STATUS_ERROR, error_);
+  // Return the current state
+  reply.set_param(XspressController::STATUS + "/" +
+    XspressController::STATUS_STATE, state_);
   // Check if we are connected to the hardware
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_CONNECTED, xsp_.checkConnected());
@@ -331,6 +362,8 @@ void XspressController::provideVersion(OdinData::IpcMessage& reply)
 void XspressController::configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
 {
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Configuration submitted: " << config.encode());
+  // First clear out any existing error message
+  setError("");
 
   // Check to see if we are configuring this control application
   if (config.has_param(XspressController::CONFIG_APP)) {
@@ -513,9 +546,11 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
   if (config.has_param(XspressController::CONFIG_XSP_MODE)) {
     std::string mode = config.get_param<std::string>(XspressController::CONFIG_XSP_MODE);
     if (mode != XSP_MODE_MCA && mode != XSP_MODE_LIST){
-      LOG4CXX_ERROR(logger_, "Invalid mode requested: " << mode);
+      std::stringstream ss;
+      ss << "Invalid mode requested: " << mode;
+      setError(ss.str());
       reply.set_msg_type(OdinData::IpcMessage::MsgTypeNack);
-      reply.set_param("error", "Invalid mode requested: " + mode);
+      reply.set_param("error", ss.str());
     } else {
       LOG4CXX_DEBUG_LEVEL(1, logger_, "mode set to " << mode);
       xsp_.setXspMode(mode);
@@ -537,6 +572,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -555,6 +591,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -573,6 +610,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -591,6 +629,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -609,6 +648,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -662,6 +702,7 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     } else {
       // Log the Xspress version
       LOG4CXX_INFO(logger_, "Connected to Xspress version: " << xsp_.getVersionString());
@@ -671,6 +712,7 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -682,6 +724,7 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -693,6 +736,7 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -704,6 +748,7 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 
@@ -715,6 +760,7 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
       reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
     }
   }
 }

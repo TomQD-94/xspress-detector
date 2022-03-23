@@ -795,11 +795,13 @@ int XspressDetector::setSca5LowLimits(std::vector<uint32_t> sca5_low_limit)
     if (sca5_low_limit.size() == xsp_chan_sca5_low_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca5_low_limit.size(); chan++){
-        status != detector_.set_window(chan, XSP_SCA5_LIM, sca5_low_limit[chan], xsp_chan_sca5_high_lim_[chan]);
+        status |= detector_.set_window(chan, XSP_SCA5_LIM, sca5_low_limit[chan], xsp_chan_sca5_high_lim_[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
+      } else {
+        setErrorString(detector_.getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -829,11 +831,13 @@ int XspressDetector::setSca5HighLimits(std::vector<uint32_t> sca5_high_limit)
     if (sca5_high_limit.size() == xsp_chan_sca5_high_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca5_high_limit.size(); chan++){
-        status != detector_.set_window(chan, XSP_SCA5_LIM, xsp_chan_sca5_low_lim_[chan], sca5_high_limit[chan]);
+        status |= detector_.set_window(chan, XSP_SCA5_LIM, xsp_chan_sca5_low_lim_[chan], sca5_high_limit[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
+      } else {
+        setErrorString(detector_.getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -863,11 +867,13 @@ int XspressDetector::setSca6LowLimits(std::vector<uint32_t> sca6_low_limit)
     if (sca6_low_limit.size() == xsp_chan_sca6_low_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca6_low_limit.size(); chan++){
-        status != detector_.set_window(chan, XSP_SCA6_LIM, sca6_low_limit[chan], xsp_chan_sca6_high_lim_[chan]);
+        status |= detector_.set_window(chan, XSP_SCA6_LIM, sca6_low_limit[chan], xsp_chan_sca6_high_lim_[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
+      } else {
+        setErrorString(detector_.getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -897,11 +903,13 @@ int XspressDetector::setSca6HighLimits(std::vector<uint32_t> sca6_high_limit)
     if (sca6_high_limit.size() == xsp_chan_sca6_high_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca6_high_limit.size(); chan++){
-        status != detector_.set_window(chan, XSP_SCA6_LIM, xsp_chan_sca6_low_lim_[chan], sca6_high_limit[chan]);
+        status |= detector_.set_window(chan, XSP_SCA6_LIM, xsp_chan_sca6_low_lim_[chan], sca6_high_limit[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
+      } else {
+        setErrorString(detector_.getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -931,11 +939,13 @@ int XspressDetector::setSca4Thresholds(std::vector<uint32_t> sca4_thresholds)
     if (sca4_thresholds.size() == xsp_chan_sca4_threshold_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca4_thresholds.size(); chan++){
-        status != detector_.set_sca_thresh(chan, sca4_thresholds[chan]);
+        status |= detector_.set_sca_thresh(chan, sca4_thresholds[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
+      } else {
+        setErrorString(detector_.getErrorString());
       }
     } else {
       std::stringstream ss;
