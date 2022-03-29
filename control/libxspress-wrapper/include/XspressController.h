@@ -142,6 +142,7 @@ private:
   static const std::string STATUS_ERROR;
   static const std::string STATUS_STATE;
   static const std::string STATUS_CONNECTED;
+  static const std::string STATUS_RECONNECT_REQUIRED;
   static const std::string STATUS_ACQ_COMPLETE;
   static const std::string STATUS_FRAMES;
   static const std::string STATUS_CHANNEL_FRAMES;

@@ -132,6 +132,8 @@ int XspressDetector::connect_mca_mode()
       // We have a valid handle to set the connected status
       LOG4CXX_INFO(logger_, "Connected to Xspress");
       connected_ = true;
+      // Reset the reconnect required flag
+      reconnect_required_ = false;
     }
   }
   return status;
@@ -154,6 +156,8 @@ int XspressDetector::connect_list_mode()
     // We have a valid handle to set the connected status
     LOG4CXX_INFO(logger_, "Connected to Xspress");
     connected_ = true;
+    // Reset the reconnect required flag
+    reconnect_required_ = false;
   }
   return status;
 }
@@ -520,34 +524,53 @@ int XspressDetector::sendSoftwareTrigger()
   return status;
 }
 
+void XspressDetector::reconnectRequired()
+{
+  // If we are already connected then changing the parameter requires
+  // a reconnection to take effect
+  if (checkConnected()){
+    // Notify that a reconnection would be required due to the parameter change
+    reconnect_required_ = true;
+  }
+}
+
+bool XspressDetector::getReconnectStatus()
+{
+  return reconnect_required_;
+}
+
 void XspressDetector::setXspNumCards(int num_cards)
 {
-  xsp_num_cards_ = num_cards;
+  if (num_cards != xsp_num_cards_){
+    xsp_num_cards_ = num_cards;
 
-  // Re initialise the connection vectors based on the number of cards
-  cards_connected_.clear();
-  cards_connected_.resize(xsp_num_cards_);
-  channels_connected_.clear();
-  channels_connected_.resize(xsp_num_cards_);
+    // Re initialise the connection vectors based on the number of cards
+    cards_connected_.clear();
+    cards_connected_.resize(xsp_num_cards_);
+    channels_connected_.clear();
+    channels_connected_.resize(xsp_num_cards_);
 
-  // Re initialise the dropped frame vectors based on the number of cards
-  xsp_status_dropped_frames_.clear();
-  xsp_status_dropped_frames_.resize(xsp_num_cards_);
+    // Re initialise the dropped frame vectors based on the number of cards
+    xsp_status_dropped_frames_.clear();
+    xsp_status_dropped_frames_.resize(xsp_num_cards_);
 
-  // Re initialise the temperature status arrays based on the number of cards
-  xsp_status_temperature_0_.clear();
-  xsp_status_temperature_0_.resize(xsp_num_cards_);
-  xsp_status_temperature_1_.clear();
-  xsp_status_temperature_1_.resize(xsp_num_cards_);
-  xsp_status_temperature_2_.clear();
-  xsp_status_temperature_2_.resize(xsp_num_cards_);
-  xsp_status_temperature_3_.clear();
-  xsp_status_temperature_3_.resize(xsp_num_cards_);
-  xsp_status_temperature_4_.clear();
-  xsp_status_temperature_4_.resize(xsp_num_cards_);
-  xsp_status_temperature_5_.clear();
-  xsp_status_temperature_5_.resize(xsp_num_cards_);
+    // Re initialise the temperature status arrays based on the number of cards
+    xsp_status_temperature_0_.clear();
+    xsp_status_temperature_0_.resize(xsp_num_cards_);
+    xsp_status_temperature_1_.clear();
+    xsp_status_temperature_1_.resize(xsp_num_cards_);
+    xsp_status_temperature_2_.clear();
+    xsp_status_temperature_2_.resize(xsp_num_cards_);
+    xsp_status_temperature_3_.clear();
+    xsp_status_temperature_3_.resize(xsp_num_cards_);
+    xsp_status_temperature_4_.clear();
+    xsp_status_temperature_4_.resize(xsp_num_cards_);
+    xsp_status_temperature_5_.clear();
+    xsp_status_temperature_5_.resize(xsp_num_cards_);
 
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 int XspressDetector::getXspNumCards()
@@ -557,7 +580,11 @@ int XspressDetector::getXspNumCards()
 
 void XspressDetector::setXspNumTf(int num_tf)
 {
-  xsp_num_tf_ = num_tf;
+  if (num_tf != xsp_num_tf_){
+    xsp_num_tf_ = num_tf;
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 int XspressDetector::getXspNumTf()
@@ -567,7 +594,11 @@ int XspressDetector::getXspNumTf()
 
 void XspressDetector::setXspBaseIP(const std::string& address)
 {
-  xsp_base_IP_ = address;
+  if (address != xsp_base_IP_){
+    xsp_base_IP_ = address;
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 std::string XspressDetector::getXspBaseIP()
@@ -577,58 +608,62 @@ std::string XspressDetector::getXspBaseIP()
 
 void XspressDetector::setXspMaxChannels(int max_channels)
 {
-  xsp_max_channels_ = max_channels;
+  if (max_channels != xsp_max_channels_){
+    xsp_max_channels_ = max_channels;
 
-  // Re initialise the frames read vector based on the maximum channels
-  xsp_status_frames_.clear();
-  xsp_status_frames_.resize(xsp_max_channels_);
+    // Re initialise the frames read vector based on the maximum channels
+    xsp_status_frames_.clear();
+    xsp_status_frames_.resize(xsp_max_channels_);
 
-  // Check if we need to initialise the scalar configuration items
-  if (xsp_chan_sca5_low_lim_.size() != max_channels){
-    xsp_chan_sca5_low_lim_.resize(max_channels);
-  }
-  if (xsp_chan_sca5_high_lim_.size() != max_channels){
-    xsp_chan_sca5_high_lim_.resize(max_channels);
-  }
-  if (xsp_chan_sca6_low_lim_.size() != max_channels){
-    xsp_chan_sca6_low_lim_.resize(max_channels);
-  }
-  if (xsp_chan_sca6_high_lim_.size() != max_channels){
-    xsp_chan_sca6_high_lim_.resize(max_channels);
-  }
-  if (xsp_chan_sca4_threshold_.size() != max_channels){
-    xsp_chan_sca4_threshold_.resize(max_channels);
-  }
+    // Check if we need to initialise the scalar configuration items
+    if (xsp_chan_sca5_low_lim_.size() != max_channels){
+      xsp_chan_sca5_low_lim_.resize(max_channels);
+    }
+    if (xsp_chan_sca5_high_lim_.size() != max_channels){
+      xsp_chan_sca5_high_lim_.resize(max_channels);
+    }
+    if (xsp_chan_sca6_low_lim_.size() != max_channels){
+      xsp_chan_sca6_low_lim_.resize(max_channels);
+    }
+    if (xsp_chan_sca6_high_lim_.size() != max_channels){
+      xsp_chan_sca6_high_lim_.resize(max_channels);
+    }
+    if (xsp_chan_sca4_threshold_.size() != max_channels){
+      xsp_chan_sca4_threshold_.resize(max_channels);
+    }
 
-  // Check if we need to initialise the DTC values
-  if (xsp_dtc_flags_.size() != max_channels){
-    xsp_dtc_flags_.resize(max_channels);
-  }
-  if (xsp_dtc_all_event_off_.size() != max_channels){
-    xsp_dtc_all_event_off_.resize(max_channels);
-  }
-  if (xsp_dtc_all_event_grad_.size() != max_channels){
-    xsp_dtc_all_event_grad_.resize(max_channels);
-  }
-  if (xsp_dtc_all_event_rate_off_.size() != max_channels){
-    xsp_dtc_all_event_rate_off_.resize(max_channels);
-  }
-  if (xsp_dtc_all_event_rate_grad_.size() != max_channels){
-    xsp_dtc_all_event_rate_grad_.resize(max_channels);
-  }
-  if (xsp_dtc_in_window_off_.size() != max_channels){
-    xsp_dtc_in_window_off_.resize(max_channels);
-  }
-  if (xsp_dtc_in_window_grad_.size() != max_channels){
-    xsp_dtc_in_window_grad_.resize(max_channels);
-  }
-  if (xsp_dtc_in_window_rate_off_.size() != max_channels){
-    xsp_dtc_in_window_rate_off_.resize(max_channels);
-  }
-  if (xsp_dtc_in_window_rate_grad_.size() != max_channels){
-    xsp_dtc_in_window_rate_grad_.resize(max_channels);
-  }
+    // Check if we need to initialise the DTC values
+    if (xsp_dtc_flags_.size() != max_channels){
+      xsp_dtc_flags_.resize(max_channels);
+    }
+    if (xsp_dtc_all_event_off_.size() != max_channels){
+      xsp_dtc_all_event_off_.resize(max_channels);
+    }
+    if (xsp_dtc_all_event_grad_.size() != max_channels){
+      xsp_dtc_all_event_grad_.resize(max_channels);
+    }
+    if (xsp_dtc_all_event_rate_off_.size() != max_channels){
+      xsp_dtc_all_event_rate_off_.resize(max_channels);
+    }
+    if (xsp_dtc_all_event_rate_grad_.size() != max_channels){
+      xsp_dtc_all_event_rate_grad_.resize(max_channels);
+    }
+    if (xsp_dtc_in_window_off_.size() != max_channels){
+      xsp_dtc_in_window_off_.resize(max_channels);
+    }
+    if (xsp_dtc_in_window_grad_.size() != max_channels){
+      xsp_dtc_in_window_grad_.resize(max_channels);
+    }
+    if (xsp_dtc_in_window_rate_off_.size() != max_channels){
+      xsp_dtc_in_window_rate_off_.resize(max_channels);
+    }
+    if (xsp_dtc_in_window_rate_grad_.size() != max_channels){
+      xsp_dtc_in_window_rate_grad_.resize(max_channels);
+    }
 
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 int XspressDetector::getXspMaxChannels()
@@ -638,7 +673,12 @@ int XspressDetector::getXspMaxChannels()
 
 void XspressDetector::setXspMaxSpectra(int max_spectra)
 {
-  xsp_max_spectra_ = max_spectra;
+  if (max_spectra != xsp_max_spectra_){
+    xsp_max_spectra_ = max_spectra;
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 int XspressDetector::getXspMaxSpectra()
@@ -648,7 +688,12 @@ int XspressDetector::getXspMaxSpectra()
 
 void XspressDetector::setXspDebug(int debug)
 {
-  xsp_debug_ = debug;
+  if (debug != xsp_debug_){
+    xsp_debug_ = debug;
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 int XspressDetector::getXspDebug()
@@ -658,7 +703,12 @@ int XspressDetector::getXspDebug()
 
 void XspressDetector::setXspConfigPath(const std::string& config_path)
 {
-  xsp_config_path_ = config_path;
+  if (config_path != xsp_config_path_){
+    xsp_config_path_ = config_path;
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 std::string XspressDetector::getXspConfigPath()
@@ -678,7 +728,12 @@ std::string XspressDetector::getXspConfigSavePath()
 
 void XspressDetector::setXspUseResgrades(bool use)
 {
-  xsp_use_resgrades_ = use;
+  if (use != xsp_use_resgrades_){
+    xsp_use_resgrades_ = use;
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 bool XspressDetector::getXspUseResgrades()
@@ -688,7 +743,12 @@ bool XspressDetector::getXspUseResgrades()
 
 void XspressDetector::setXspRunFlags(int flags)
 {
-  xsp_run_flags_ = flags;
+  if (flags != xsp_run_flags_){
+    xsp_run_flags_ = flags;
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 int XspressDetector::getXspRunFlags()
@@ -698,7 +758,12 @@ int XspressDetector::getXspRunFlags()
 
 void XspressDetector::setXspDTCEnergy(double energy)
 {
-  xsp_dtc_energy_ = energy;
+  if (energy != xsp_dtc_energy_){
+    xsp_dtc_energy_ = energy;
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 double XspressDetector::getXspDTCEnergy()
@@ -768,7 +833,12 @@ int XspressDetector::getXspFrames()
 
 void XspressDetector::setXspMode(const std::string& mode)
 {
-  xsp_mode_ = mode;
+  if (mode != xsp_mode_){
+    xsp_mode_ = mode;
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
 }
 
 std::string XspressDetector::getXspMode()

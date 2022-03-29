@@ -71,6 +71,8 @@ public:
   int startAcquisition();
   int stopAcquisition();
   int sendSoftwareTrigger();
+  void reconnectRequired();
+  bool getReconnectStatus();
 
   // Getter and Setters
   void setXspNumCards(int num_cards);

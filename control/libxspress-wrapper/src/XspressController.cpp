@@ -83,6 +83,7 @@ const std::string XspressController::STATUS                           = "status"
 const std::string XspressController::STATUS_ERROR                     = "error";
 const std::string XspressController::STATUS_STATE                     = "state";
 const std::string XspressController::STATUS_CONNECTED                 = "connected";
+const std::string XspressController::STATUS_RECONNECT_REQUIRED        = "reconnect_required";
 const std::string XspressController::STATUS_ACQ_COMPLETE              = "acquisition_complete";
 const std::string XspressController::STATUS_FRAMES                    = "frames_acquired";
 const std::string XspressController::STATUS_CHANNEL_FRAMES            = "ch_frames_acquired";
@@ -263,6 +264,9 @@ void XspressController::provideStatus(OdinData::IpcMessage& reply)
   // Check if we are connected to the hardware
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_CONNECTED, xsp_.checkConnected());
+  // Check if we need to perform a reconnection to the hardware
+  reply.set_param(XspressController::STATUS + "/" +
+    XspressController::STATUS_RECONNECT_REQUIRED, xsp_.getReconnectStatus());
   // Clients expect the acq complete status, which is the inverse of the acquiring method
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_ACQ_COMPLETE, !xsp_.getXspAcquiring());
