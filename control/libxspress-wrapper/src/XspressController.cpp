@@ -86,6 +86,8 @@ const std::string XspressController::STATUS_CONNECTED                 = "connect
 const std::string XspressController::STATUS_RECONNECT_REQUIRED        = "reconnect_required";
 const std::string XspressController::STATUS_ACQ_COMPLETE              = "acquisition_complete";
 const std::string XspressController::STATUS_FRAMES                    = "frames_acquired";
+const std::string XspressController::STATUS_CHANNELS_CONNECTED        = "num_ch_connected";
+const std::string XspressController::STATUS_CARDS_CONNECTED           = "cards_connected";
 const std::string XspressController::STATUS_CHANNEL_FRAMES            = "ch_frames_acquired";
 const std::string XspressController::STATUS_FEM_DROPPED_FRAMES        = "fem_dropped_frames";
 const std::string XspressController::STATUS_LIVE_SCALAR[]             = {"scalar_0",
@@ -273,6 +275,18 @@ void XspressController::provideStatus(OdinData::IpcMessage& reply)
   // Number of frames read for current acquisition
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_FRAMES, xsp_.getXspFramesRead());
+  // Number of channels connected per card
+  std::vector<int32_t> ch_con = xsp_.getChannelsConnected();
+  for (int index = 0; index < ch_con.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_CHANNELS_CONNECTED + "[]", ch_con[index]);
+  }
+  // Cards connected status
+  std::vector<bool> cards_con = xsp_.getCardsConnected();
+  for (int index = 0; index < cards_con.size(); index++){
+    reply.set_param(XspressController::STATUS + "/" +
+                    XspressController::STATUS_CARDS_CONNECTED + "[]", (int32_t)cards_con[index]);
+  }
   // Number of frames per FEM
   std::vector<int32_t> ch_frames = xsp_.getXspFEMFramesRead();
   for (int index = 0; index < ch_frames.size(); index++){
@@ -731,6 +745,14 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
       LOG4CXX_INFO(logger_, "Connected to Xspress version: " << xsp_.getVersionString());
       // Attempt to restore the settings
       status = xsp_.restoreSettings();
+    }
+    if (status != XSP_STATUS_OK){
+      // Command failed, return error with any error string
+      reply.set_nack(xsp_.getErrorString());
+      setError(xsp_.getErrorString());
+    } else {
+      // Check the connected channels and cards
+      status = xsp_.setupChannels();
     }
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string

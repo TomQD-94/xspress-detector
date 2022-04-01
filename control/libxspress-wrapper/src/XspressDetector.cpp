@@ -1182,4 +1182,14 @@ std::vector<int32_t> XspressDetector::getXspFEMDroppedFrames()
   return xsp_status_dropped_frames_;
 }
 
+std::vector<int32_t> XspressDetector::getChannelsConnected()
+{
+  return channels_connected_;
+}
+
+std::vector<bool> XspressDetector::getCardsConnected()
+{
+  return cards_connected_;
+}
+
 } /* namespace Xspress */

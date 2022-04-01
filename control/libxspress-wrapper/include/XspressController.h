@@ -145,6 +145,8 @@ private:
   static const std::string STATUS_RECONNECT_REQUIRED;
   static const std::string STATUS_ACQ_COMPLETE;
   static const std::string STATUS_FRAMES;
+  static const std::string STATUS_CHANNELS_CONNECTED;
+  static const std::string STATUS_CARDS_CONNECTED;
   static const std::string STATUS_CHANNEL_FRAMES;
   static const std::string STATUS_FEM_DROPPED_FRAMES;
 

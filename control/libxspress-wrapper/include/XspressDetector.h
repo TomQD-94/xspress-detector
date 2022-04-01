@@ -145,6 +145,8 @@ public:
   std::vector<float> getTemperature5();
   std::vector<int32_t> getXspFEMFramesRead();
   std::vector<int32_t> getXspFEMDroppedFrames();
+  std::vector<int32_t> getChannelsConnected();
+  std::vector<bool> getCardsConnected();
   
 private:
   /** libxspress wrapper object */
