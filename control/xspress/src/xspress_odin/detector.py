@@ -463,7 +463,9 @@ class XspressDetector(object):
 
     async def acquire(self, value, *unused):
         if value:
-            return await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START, 1)
+            reply = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START, 1)
+            self.acquisition_complete = False
+            return reply
         else:
             return await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_STOP, 1)
 
