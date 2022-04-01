@@ -460,6 +460,9 @@ int XspressDetector::startAcquisition()
   // Check we are connected to the hardware
   LOG4CXX_INFO(logger_, "Arming detector for data collection");
 
+  // Lock the start acquisition mutex
+  boost::lock_guard<boost::mutex> lock(start_acq_mutex_);
+
   if (checkConnected()){
     // Set the trigger mode
     status = setTriggerMode();
@@ -1131,6 +1134,10 @@ bool XspressDetector::getXspAcquiring()
   // the DAQ status of acquiring if we are in MCA mode
   // because our class acquiring flag is latched and can
   // only be reset once we know that the DAQ has completed.
+
+  // Lock the start acquisition mutex
+  boost::lock_guard<boost::mutex> lock(start_acq_mutex_);
+
   if (acquiring_){
     if (daq_){
       // Check the DAQ flag.  If it is false then reset our flag

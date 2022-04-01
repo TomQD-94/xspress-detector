@@ -249,6 +249,10 @@ private:
 
   /** Last error string description */
   std::string                   error_string_;
+
+  /** StartAcquisition mutex for locking */
+  boost::mutex                  start_acq_mutex_;
+
 };
 
 } /* namespace Xspress */
