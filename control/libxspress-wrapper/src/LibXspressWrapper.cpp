@@ -332,8 +332,6 @@ int LibXspressWrapper::set_dtc_energy(double dtc_energy)
   int status = XSP_STATUS_OK;
   int xsp_status = 0;
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_setDeadTimeCalculationEnergy");
-  // We ensure here that DTC energy is set between application restart and frame
-  // acquisition; otherwise libxspress3 would use an unspecified DTC energy.
   xsp_status = xsp3_setDeadtimeCalculationEnergy(xsp_handle_, dtc_energy);
   if (xsp_status != XSP3_OK) {
     checkErrorCode("xsp3_setDeadtimeCalculationEnergy", xsp_status);

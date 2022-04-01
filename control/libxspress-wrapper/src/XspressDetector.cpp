@@ -758,11 +758,16 @@ int XspressDetector::getXspRunFlags()
 
 void XspressDetector::setXspDTCEnergy(double energy)
 {
+  int status = XSP_STATUS_OK;
   if (energy != xsp_dtc_energy_){
     xsp_dtc_energy_ = energy;
-
-    // Notify that reconnect is required
-    reconnectRequired();
+  }
+  // If we are connected then set the DTC energy
+  if (checkConnected()){
+    status = detector_.set_dtc_energy(xsp_dtc_energy_);
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
   }
 }
 
