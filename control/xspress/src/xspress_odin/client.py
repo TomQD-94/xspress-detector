@@ -11,6 +11,7 @@ from zmq.utils.strtypes import unicode, cast_bytes
 from odin_data.ipc_channel import _cast_str
 
 
+DEFAULT_TIMEOUT = 5
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
 QUEUE_SIZE_LIMIT = 10
 
@@ -105,7 +106,7 @@ class AsyncClient(AbstractClient):
 
         super().__init__(ip, port, self._on_recv_callback)
 
-    async def send_recv(self, msg: IpcMessage, timeout=1):
+    async def send_recv(self, msg: IpcMessage, timeout=DEFAULT_TIMEOUT):
         if not self.connected:
             raise ConnectionError(f"AsyncClient.send_recv: Failed to send msg {id}. ZMQ socket not connected.\nmessage: {msg.encode()}")
         id = self.get_id()
@@ -116,15 +117,17 @@ class AsyncClient(AbstractClient):
 
         time_elapsed = 0
         time_to_sleep = 0.001
-        while time_elapsed < timeout:
-            await asyncio.sleep(time_to_sleep)
-            time_elapsed +=time_to_sleep
+        minimum_sleep_time = 0.1
+        while time_elapsed <= timeout:
+            await asyncio.sleep(min(time_to_sleep, minimum_sleep_time))
+            time_elapsed += time_to_sleep
             time_to_sleep *= 2
             if id in self.recv_buffer:
                 self.send_buffer.pop(id)
                 return self.recv_buffer.pop(id)
-        self.send_buffer.pop(id)
-        raise TimeoutError(f"AsyncClient.send_recv timed out on message: {id}.")
+
+        msg = self.send_buffer.pop(id)
+        raise TimeoutError(f"AsyncClient.send_recv timed out on message {id}:\n{msg}")
 
     def _on_recv_callback(self, msg):
         data = _cast_str(msg[0])
@@ -134,15 +137,22 @@ class AsyncClient(AbstractClient):
         if id in self.send_buffer: # else it's already timed out 
             self.recv_buffer[id] = ipc_msg
 
+def true_after_n_calls(x):
+    n = 0
+    while True:
+        yield n%x == 0
+        n+=1
 class CallbackClient(AbstractClient):
 
     def __init__(self, ip, port, callback):
         super().__init__(ip, port, callback)
+        self.gen = true_after_n_calls(100)
 
     def send(self, msg: IpcMessage):
         n_flushed = self.stream.flush() # This is probably not needed
         logging.debug("number of events flushed: {}".format(n_flushed))
         msg.set_msg_id(self.get_id())
-        logging.info("Sending message:\n%s", msg.encode())
+        logging.debug("Sending message:\n%s", msg.encode())
         self.stream.send(cast_bytes(msg.encode()))
-        logging.error(f"queue size = {self.queue_size}")
+        if self.queue_size > 0 and next(self.gen):
+            logging.error(f"queue size = {self.queue_size}")

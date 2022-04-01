@@ -62,16 +62,18 @@ class XspressAdapter(AsyncApiAdapter):
             run_flags = int(self.options['run_flags'])
             debug = int(self.options["debug"])
             # trigger_mode = XspressTriggerMode.str2int(self.options["trigger_mode"])
+            daq_endpoints= self.options["daq_endpoints"].replace(" ", "").split(",")
             self.detector.configure(
-                num_cards,
-                num_tf,
-                base_ip,
-                max_channels,
-                max_spectra,
-                settings_path,
-                run_flags,
-                debug,
-                )
+                num_cards=num_cards,
+                num_tf=num_tf,
+                base_ip=base_ip,
+                max_channels=max_channels,
+                max_spectra=max_spectra,
+                settings_path=settings_path,
+                run_flags=run_flags,
+                debug=debug,
+                daq_endpoints=daq_endpoints,
+            )
             logging.debug('done configuring detector')
         except XspressDetectorException as e:
             logging.error('XspressAdapter failed to initialise detector: %s', e)

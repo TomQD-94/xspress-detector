@@ -15,9 +15,13 @@ from .client import AsyncClient, CallbackClient
 from .debug import debug_method
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
-UPDATE_PARAMS_PERIOD_SECONDS = 5
+UPDATE_PARAMS_PERIOD_SECONDS = 0.5
 QUEUE_SIZE_LIMIT = 10
 
+XSPRESS_MODE_MCA = "mca"
+XSPRESS_MODE_LIST = "list"
+XSPRESS_EXPOSURE_LOWER_LIMIT = 1./1000000
+XSPRESS_EXPOSURE_UPPER_LIMIT = 20.0
 
 def is_coroutine(object):
     """
@@ -78,6 +82,7 @@ class MessageType(Enum):
     REQUEST = 3
     CONFIG_ROOT = 4
     CONFIG_APP = 5
+    DAQ = 6
 
 class XspressTriggerMode:
     TM_SOFTWARE            = 0
@@ -107,6 +112,10 @@ class XspressTriggerMode:
 
 class XspressDetectorStr:
     STATUS                       = "status"
+    STATUS_ERROR                 = "error"
+    STATUS_STATE                 = "state"
+    STATUS_CONNECTED             = "connected"
+    STATUS_RECONNECT_REQUIRED    = "reconnect_required"
     STATUS_SENSOR                = "sensor"
     STATUS_SENSOR_HEIGHT         = "height"
     STATUS_SENSOR_WIDTH          = "width"
@@ -126,6 +135,16 @@ class XspressDetectorStr:
     STATUS_SCALAR_8              = "scalar_8"
     STATUS_DTC                   = "dtc"
     STATUS_INP_EST               = "inp_est"
+    STATUS_TEMP_0                = "temp_0"
+    STATUS_TEMP_1                = "temp_1"
+    STATUS_TEMP_2                = "temp_2"
+    STATUS_TEMP_3                = "temp_3"
+    STATUS_TEMP_4                = "temp_4"
+    STATUS_TEMP_5                = "temp_5"
+    STATUS_CH_FRAMES             = "ch_frames_acquired"
+    STATUS_FEM_DROPPED_FRAMES    = "fem_dropped_frames"
+    STATUS_CARDS_CONNECTED       = "cards_connected"
+    STATUS_NUM_CH_CONNECTED      = "num_ch_connected"
 
     CONFIG_ADAPTER               = "adapter"
     CONFIG_ADAPTER_RESET         = "reset"
@@ -205,6 +224,8 @@ class XspressDetectorStr:
     VERSION_XSPRESS_DETECTOR_SHORT = "short"
     VERSION_XSPRESS_DETECTOR_FULL = "full"
 
+    API                          = "api"
+
 
 class XspressDetectorException(Exception):
     pass
@@ -233,6 +254,22 @@ class XspressDetector(object):
         self.ctr_endpoint = ENDPOINT_TEMPLATE.format(ip, port)
         self.ctr_debug = 0
 
+        self.api : str = ""
+        self.error : str = ""
+        self.state : str = ""
+
+        self.temp_0 : list[float] = []
+        self.temp_1 : list[float] = []
+        self.temp_2 : list[float] = []
+        self.temp_3 : list[float] = []
+        self.temp_4 : list[float] = []
+        self.temp_5 : list[float] = []
+
+        self.ch_frames_acquired : list[int] = []
+        self.fem_dropped_frames : list[int] = []
+        self.num_ch_connected : list[int] = []
+        self.cards_connected : list[int] = []
+
         # xsp parameter tree members
         self.num_cards : int = 0
         self.num_tf : int = 0
@@ -257,10 +294,12 @@ class XspressDetector(object):
         self.endpoints : list[str] = [] # daq endpoints
 
         # status parameter tree members
+        self.connected : bool = False
+        self.reconnect_required : bool = False
         self.acquisition_complete : bool = False
         self.frames_acquired : int = 0
 
-        self.mode: str = "" # 'spectrum' or 'list' for readback
+        self.mode: str = "" # 'mca' or 'list' for readback
 
         self.sca5_low_lim : list[int] = []
         self.sca5_high_lim : list[int] = []
@@ -303,7 +342,7 @@ class XspressDetector(object):
 
         tree = \
         {
-
+            XspressDetectorStr.API : (lambda: self.api, partial(self._set, 'api'), {}),
             XspressDetectorStr.CONFIG_APP :
             {
 
@@ -330,7 +369,7 @@ class XspressDetector(object):
                     XspressDetectorStr.STATUS_SENSOR_WIDTH: (lambda: self.max_spectra, {}),
                     XspressDetectorStr.STATUS_SENSOR_BYTES: (lambda: self.max_spectra * self.max_spectra * 4, {}), # 4 bytes per int32 point
                 },
-                XspressDetectorStr.STATUS_MANUFACTURER: (lambda: "Quandum Detectors", {}),
+                XspressDetectorStr.STATUS_MANUFACTURER: (lambda: "Quantum Detectors", {}),
                 XspressDetectorStr.STATUS_MODEL: (lambda: "Xspress 4", {}),
                 XspressDetectorStr.STATUS_ACQ_COMPLETE : (lambda: self.acquisition_complete, partial(self._set, 'acquisition_complete'), {}),
                 XspressDetectorStr.STATUS_FRAMES : (lambda: self.frames_acquired, partial(self._set, 'frames_acquired'), {}),
@@ -347,6 +386,21 @@ class XspressDetector(object):
 
                 XspressDetectorStr.STATUS_DTC : (lambda: self.dtc, partial(self._set, 'dtc')),
                 XspressDetectorStr.STATUS_INP_EST : (lambda: self.inp_est, partial(self._set, 'inp_est')),
+
+                XspressDetectorStr.STATUS_ERROR : (lambda: self.error, partial(self._set, 'error'), {}),
+                XspressDetectorStr.STATUS_STATE : (lambda: self.state, partial(self._set, 'state'), {}),
+                XspressDetectorStr.STATUS_CONNECTED : (lambda: self.connected, partial(self._set, 'connected'), {}),
+                XspressDetectorStr.STATUS_RECONNECT_REQUIRED : (lambda: self.reconnect_required, partial(self._set, 'reconnect_required'), {}),
+                XspressDetectorStr.STATUS_TEMP_0 : (lambda: self.temp_0, partial(self._set, 'temp_0')),
+                XspressDetectorStr.STATUS_TEMP_1 : (lambda: self.temp_1, partial(self._set, 'temp_1')),
+                XspressDetectorStr.STATUS_TEMP_2 : (lambda: self.temp_2, partial(self._set, 'temp_2')),
+                XspressDetectorStr.STATUS_TEMP_3 : (lambda: self.temp_3, partial(self._set, 'temp_3')),
+                XspressDetectorStr.STATUS_TEMP_4 : (lambda: self.temp_4, partial(self._set, 'temp_4')),
+                XspressDetectorStr.STATUS_TEMP_5 : (lambda: self.temp_5, partial(self._set, 'temp_5')),
+                XspressDetectorStr.STATUS_CH_FRAMES : (lambda: self.ch_frames_acquired, partial(self._set, 'ch_frames_acquired')),
+                XspressDetectorStr.STATUS_FEM_DROPPED_FRAMES : (lambda: self.fem_dropped_frames, partial(self._set, 'fem_dropped_frames')),
+                XspressDetectorStr.STATUS_CARDS_CONNECTED : (lambda: self.cards_connected, partial(self._set, 'cards_connected')),
+                XspressDetectorStr.STATUS_NUM_CH_CONNECTED : (lambda: self.num_ch_connected, partial(self._set, 'num_ch_connected')),
             },
 
             XspressDetectorStr.CONFIG_XSP :
@@ -442,7 +496,7 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_XSP_INVERT_VETO : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_INVERT_VETO), {}),
                 XspressDetectorStr.CONFIG_XSP_DEBOUNCE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_DEBOUNCE), {}),
                 XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_TRIGGER_MODE), {}),
-                XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME), {}),
+                XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME : (None, partial(self.set_exposure), {}),
                 XspressDetectorStr.CONFIG_XSP_NUM_IMAGES : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_NUM_IMAGES), {}),
                 XspressDetectorStr.CONFIG_XSP_SCA5_LOW : (None, partial(self._put, MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_SCA5_LOW), {}),
             },
@@ -471,10 +525,18 @@ class XspressDetector(object):
 
     async def set_mode(self, value):
         if value == 0:
-            return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MODE, "mca")
+            return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MODE, XSPRESS_MODE_MCA)
         else: # value == "list"
-            return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MODE, "list")
+            return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MODE, XSPRESS_MODE_LIST)
 
+    async def set_exposure(self, time: float):
+        if time < XSPRESS_EXPOSURE_LOWER_LIMIT or time > XSPRESS_EXPOSURE_UPPER_LIMIT:
+            raise ValueError((
+                f"Cannot set exposure to values outside of the range "
+                f"({XSPRESS_EXPOSURE_LOWER_LIMIT}, {XSPRESS_EXPOSURE_UPPER_LIMIT})"
+                f".\n value provided was {time}"
+            ))
+        return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME, time)
 
     def do_updates(self, value: int):
         if value:
@@ -570,13 +632,28 @@ class XspressDetector(object):
                 # self.logger.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
             except ParameterTreeError as e:
                 self.logger.error(e)
-                self.logger.warning(f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree")
+                self.logger.warning(
+                    (
+                        f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree\n"
+                        f"params = {params}"
+                    )
+                )
                 pass
         else:
             for param_name, params in params.items():
                 self._param_tree_set_recursive(f"{path}/{param_name}", params)
 
-    def configure(self, num_cards, num_tf, base_ip, max_channels, max_spectra, settings_path, run_flags, debug):
+    def configure(self,
+        num_cards,
+        num_tf,
+        base_ip,
+        max_channels,
+        max_spectra,
+        settings_path,
+        run_flags,
+        debug,
+        daq_endpoints,
+        ):
         self.logger.critical(debug_method())
         self.num_cards = num_cards
         self.num_tf = num_tf
@@ -586,6 +663,7 @@ class XspressDetector(object):
         self.settings_path = settings_path
         self.run_flags = run_flags
         self.debug = debug
+        self.endpoints = daq_endpoints
 
         x = XspressDetectorStr
         config = {
@@ -599,12 +677,18 @@ class XspressDetector(object):
             x.CONFIG_XSP_DEBUG: self.debug,
         }
         self.initial_config_msg = self._build_message(MessageType.CONFIG_XSP, config)
-        # self._callback_client.send(self.initial_config_msg)
-        # self._connect() # uncomment this when ready to test with real XSP
+        self.initial_daq_msg = self._build_message(MessageType.DAQ, {
+            x.CONFIG_DAQ_ZMQ_ENDPOINTS: daq_endpoints,
+            x.CONFIG_DAQ_ENABLED: True,
+        })
         self.sched.start()
 
-    def reset(self, *unused):
-        self._callback_client.send(self.initial_config_msg)
+    async def reset(self, *unused):
+        resp = await self._async_client.send_recv(self.initial_config_msg)
+        if self.mode == XSPRESS_MODE_MCA:
+            resp = await self._async_client.send_recv(self.initial_daq_msg)
+        return resp
+        
 
 
     def _connect(self):
@@ -642,6 +726,8 @@ class XspressDetector(object):
             params_group = XspressDetectorStr.CONFIG_XSP
         elif message_type == MessageType.CMD:
             params_group = XspressDetectorStr.CONFIG_CMD
+        elif message_type == MessageType.DAQ:
+            params_group = XspressDetectorStr.CONFIG_DAQ
         else:
             raise XspressDetectorException(f"XspressDetector._build_message: {message_type} is not type MessageType")
         msg = IpcMessage("cmd", "configure")
