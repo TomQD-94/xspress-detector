@@ -333,7 +333,7 @@ void XspressController::provideStatus(OdinData::IpcMessage& reply)
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[4] + "[]", (double)temp_4[index]);
   }
-  std::vector<float> temp_5 = xsp_.getTemperature0();
+  std::vector<float> temp_5 = xsp_.getTemperature5();
   for (int index = 0; index < temp_5.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[5] + "[]", (double)temp_5[index]);
