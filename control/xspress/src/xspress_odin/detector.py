@@ -206,6 +206,7 @@ class XspressDetectorStr:
     CONFIG_DAQ_ZMQ_ENDPOINTS     = "endpoints"
 
     CONFIG_CMD                   = "command"
+    CONFIG_CMD_RECONFIGURE       = "reconfigure"
     CONFIG_CMD_CONNECT           = "connect"
     CONFIG_CMD_DISCONNECT        = "disconnect"
     CONFIG_CMD_SAVE              = "save"
@@ -511,6 +512,7 @@ class XspressDetector(object):
                 XspressDetectorStr.CONFIG_CMD_TRIGGER : (None, partial(self._put, MessageType.CMD, XspressDetectorStr.CONFIG_CMD_TRIGGER)),
                 XspressDetectorStr.CONFIG_CMD_START_ACQUISITION : (None, partial(self.acquire, 1)),
                 XspressDetectorStr.CONFIG_CMD_STOP_ACQUISITION : (None, partial(self.acquire, 0)),
+                XspressDetectorStr.CONFIG_CMD_RECONFIGURE : (None, self.reconfigure),
             },
         }
         self.put_parameter_tree = ParameterTree(self.put_tree)
@@ -537,6 +539,14 @@ class XspressDetector(object):
                 f".\n value provided was {time}"
             ))
         return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME, time)
+    
+    async def reconfigure(self, *unused):
+        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_DISCONNECT, 1)
+        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT, 1)
+        if self.mode == XSPRESS_MODE_MCA:
+            resp = await self._async_client.send_recv(self.initial_daq_msg)
+        return resp
+
 
     def do_updates(self, value: int):
         if value:
