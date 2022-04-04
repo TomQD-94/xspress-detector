@@ -75,6 +75,8 @@ private:
         // Plugin interface
         void process_frame(boost::shared_ptr <Frame> frame);
 
+        void send_scalars(uint32_t num_scalars, uint32_t first_channel, uint32_t num_channels);
+
         uint32_t num_frames_;
         uint32_t num_energy_bins_;
         uint32_t num_aux_;
@@ -85,6 +87,15 @@ private:
         uint32_t concurrent_rank_;
         std::string acq_id_;
         std::string live_view_name_;
+
+        /** Time the last scalar message was sent */
+        boost::posix_time::ptime last_scalar_send_time_;
+        /** Memory block for scalars */
+        void *scalar_memblock_;
+        void *dtc_memblock_;
+        void *inp_est_memblock_;
+        /** Number of scalars recorded */
+        uint32_t num_scalars_recorded_;
 
 
         std::vector<boost::shared_ptr<XspressMemoryBlock> > memory_ptrs_;

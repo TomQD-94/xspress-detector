@@ -8,6 +8,11 @@
 #include "XspressDefinitions.h"
 #include "DebugLevelLogger.h"
 
+
+#define MAX_SCALAR_MEM_BLOCK_SIZE 1000
+#define DEFAULT_SCALAR_QTY 9
+#define SCALAR_POST_TIME_MS 50
+
 namespace FrameProcessor {
 
 const std::string XspressProcessPlugin::CONFIG_ACQ_ID               = "acq_id";
@@ -121,7 +126,12 @@ XspressProcessPlugin::XspressProcessPlugin() :
   concurrent_processes_(1),
   concurrent_rank_(0),
   acq_id_(""),
-  live_view_name_("")
+  live_view_name_(""),
+  last_scalar_send_time_(boost::posix_time::min_date_time),
+  scalar_memblock_(0),
+  dtc_memblock_(0),
+  inp_est_memblock_(0),
+  num_scalars_recorded_(0)
 {
   // Setup logging for the class
   logger_ = Logger::getLogger("FP.XspressProcessPlugin");
@@ -248,6 +258,20 @@ void XspressProcessPlugin::setup_memory_allocation()
     ptr->set_size(frame_size, frames_per_block_);
     memory_ptrs_.push_back(ptr);
   }
+
+  // Init the scalar memory allocation
+  if (scalar_memblock_){
+    free(scalar_memblock_);
+  }
+  scalar_memblock_ = malloc(sizeof(uint32_t) * MAX_SCALAR_MEM_BLOCK_SIZE * num_channels_ * DEFAULT_SCALAR_QTY);
+  if (dtc_memblock_){
+    free(dtc_memblock_);
+  }
+  dtc_memblock_ = malloc(sizeof(double) * MAX_SCALAR_MEM_BLOCK_SIZE * num_channels_);
+  if (inp_est_memblock_){
+    free(inp_est_memblock_);
+  }
+  inp_est_memblock_ = malloc(sizeof(double) * MAX_SCALAR_MEM_BLOCK_SIZE * num_channels_);
 }
 
 void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame) 
@@ -264,6 +288,14 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
     LOG4CXX_INFO(logger_, "  Number of channels: " << header->num_channels);
     LOG4CXX_INFO(logger_, "  Number of scalars: " << header->num_scalars);
     LOG4CXX_INFO(logger_, "  Number of resgrades: " << header->num_aux);
+
+    // Reset all memory blocks holding mca data
+    for (int index = 0; index < num_channels_; index++){
+      memory_ptrs_[index]->reset();
+    }
+
+    // Reset the number of scalars recorded to zero
+    num_scalars_recorded_ = 0;
   }
 
   // Check the number of channels.  If the number of channels is different
@@ -315,57 +347,21 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
                            " " << sca_ptr[8 + (cindex*9)]);
   }
 
-  rapidjson::Document meta_document;
-  meta_document.SetObject();
+  // Memcpy the scalars into the correct memory location
+  uint32_t *dest_ptr = (uint32_t *)scalar_memblock_;
+  dest_ptr += (num_scalar_values * num_scalars_recorded_);
+  memcpy(dest_ptr, sca_ptr, num_scalar_values * sizeof(uint32_t));
+  num_scalars_recorded_ += 1;
 
-  // Add Acquisition ID
-  rapidjson::Value key_acq_id("acqID", meta_document.GetAllocator());
-  rapidjson::Value value_acq_id;
-  value_acq_id.SetString(acq_id_.c_str(), acq_id_.size(), meta_document.GetAllocator());
-  meta_document.AddMember(key_acq_id, value_acq_id, meta_document.GetAllocator());
-  // Add rank
-  rapidjson::Value key_rank("rank", meta_document.GetAllocator());
-  rapidjson::Value value_rank;
-  value_rank.SetInt(concurrent_rank_);
-  meta_document.AddMember(key_rank, value_rank, meta_document.GetAllocator());
-  // Add number of data points
-  rapidjson::Value key_qty("qty_scalars", meta_document.GetAllocator());
-  rapidjson::Value value_qty;
-  value_qty.SetInt(num_scalar_values);
-  meta_document.AddMember(key_qty, value_qty, meta_document.GetAllocator());
-  // Add channel index
-  rapidjson::Value key_index("channel_index", meta_document.GetAllocator());
-  rapidjson::Value value_index;
-  value_index.SetInt(first_channel_index);
-  meta_document.AddMember(key_index, value_index, meta_document.GetAllocator());
-  // Add number of channels
-  rapidjson::Value key_num("number_of_channels", meta_document.GetAllocator());
-  rapidjson::Value value_num;
-  value_num.SetInt(header->num_channels);
-  meta_document.AddMember(key_num, value_num, meta_document.GetAllocator());
+  // Calculate the elapsed time since we last posted meta data
+  boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
+  int32_t elapsed_time = (now - last_scalar_send_time_).total_milliseconds();
 
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-  meta_document.Accept(writer);
-
-  LOG4CXX_DEBUG_LEVEL(3, logger_, "Publishing MCA scalars: " << buffer.GetString());
-  this->publish_meta("xspress",
-                      "xspress_scalars",
-                      sca_ptr,
-                      num_scalar_values * sizeof(uint32_t),
-                      buffer.GetString());
-
-  this->publish_meta("xspress",
-                      "xspress_dtc",
-                      dtc_ptr,
-                      num_dtc_factors * sizeof(double),
-                      buffer.GetString());
-
-  this->publish_meta("xspress",
-                      "xspress_inp_est",
-                      inp_est_ptr,
-                      num_inp_est * sizeof(double),
-                      buffer.GetString());
+  // If the POST_TIME has elapsed or the maximum block of scalars has been reached then post them out
+  if ((elapsed_time >= SCALAR_POST_TIME_MS) || (num_scalars_recorded_ == MAX_SCALAR_MEM_BLOCK_SIZE)){
+    send_scalars(header->num_scalars, header->first_channel, header->num_channels);
+    last_scalar_send_time_ = now;
+  }
 
   char *mca_ptr = frame_bytes;
   mca_ptr += (sizeof(FrameHeader) + 
@@ -415,6 +411,9 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
       // Check if we are writing out the last block which is not full size
       if (frame_id == (num_frames_-1)){
         LOG4CXX_DEBUG_LEVEL(3, logger_, "num_frames_ - 1: " << (num_frames_-1));
+        // As this is the last frame block to send post the scalar buffer as well
+        send_scalars(header->num_scalars, header->first_channel, header->num_channels);
+
         dimensions_t mca_dims;
         mca_dims.push_back(header->num_aux);
         mca_dims.push_back(header->num_energy_bins);
@@ -436,6 +435,71 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
       }
     }
   }
+}
+
+void XspressProcessPlugin::send_scalars(uint32_t num_scalars, uint32_t first_channel, uint32_t num_channels)
+{
+  uint32_t num_scalar_values = num_scalars * num_channels;
+  uint32_t num_dtc_factors = num_channels;
+  uint32_t num_inp_est = num_channels;
+
+  rapidjson::Document meta_document;
+  meta_document.SetObject();
+
+  // Add Acquisition ID
+  rapidjson::Value key_acq_id("acqID", meta_document.GetAllocator());
+  rapidjson::Value value_acq_id;
+  value_acq_id.SetString(acq_id_.c_str(), acq_id_.size(), meta_document.GetAllocator());
+  meta_document.AddMember(key_acq_id, value_acq_id, meta_document.GetAllocator());
+  // Add rank
+  rapidjson::Value key_rank("rank", meta_document.GetAllocator());
+  rapidjson::Value value_rank;
+  value_rank.SetInt(concurrent_rank_);
+  meta_document.AddMember(key_rank, value_rank, meta_document.GetAllocator());
+  // Add number of data points
+  rapidjson::Value key_qty("qty_scalars", meta_document.GetAllocator());
+  rapidjson::Value value_qty;
+  value_qty.SetInt(num_scalar_values);
+  meta_document.AddMember(key_qty, value_qty, meta_document.GetAllocator());
+  // Add channel index
+  rapidjson::Value key_index("channel_index", meta_document.GetAllocator());
+  rapidjson::Value value_index;
+  value_index.SetInt(first_channel);
+  meta_document.AddMember(key_index, value_index, meta_document.GetAllocator());
+  // Add number of channels
+  rapidjson::Value key_num("number_of_channels", meta_document.GetAllocator());
+  rapidjson::Value value_num;
+  value_num.SetInt(num_channels);
+  meta_document.AddMember(key_num, value_num, meta_document.GetAllocator());
+  rapidjson::Value key_num_frames("number_of_frames", meta_document.GetAllocator());
+  rapidjson::Value value_num_frames;
+  value_num_frames.SetInt(num_scalars_recorded_);
+  meta_document.AddMember(key_num_frames, value_num_frames, meta_document.GetAllocator());
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  meta_document.Accept(writer);
+
+  LOG4CXX_DEBUG_LEVEL(3, logger_, "Publishing MCA scalars: " << buffer.GetString());
+  this->publish_meta("xspress",
+                      "xspress_scalars",
+                      scalar_memblock_,
+                      num_scalar_values * num_scalars_recorded_ * sizeof(uint32_t),
+                      buffer.GetString());
+
+  this->publish_meta("xspress",
+                      "xspress_dtc",
+                      dtc_memblock_,
+                      num_dtc_factors * num_scalars_recorded_ * sizeof(double),
+                      buffer.GetString());
+
+  this->publish_meta("xspress",
+                      "xspress_inp_est",
+                      inp_est_memblock_,
+                      num_inp_est * num_scalars_recorded_ * sizeof(double),
+                      buffer.GetString());
+
+  num_scalars_recorded_ = 0;
 }
 
 }
