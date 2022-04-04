@@ -4,6 +4,11 @@
 #include <arpa/inet.h>
 #include "XspressListModeFrameDecoder.h"
 
+// Port on xspress to send ACK packets to
+#define XSPRESS_ACK_PORT 30124
+// Size of ACK packet (int32 words)
+#define XSPRESS_ACK_SIZE 6
+
 namespace FrameReceiver {
 
     XspressListModeFrameDecoder::XspressListModeFrameDecoder() : FrameDecoderUDP(),
@@ -13,10 +18,7 @@ namespace FrameReceiver {
       current_frame_buffer_id_(-1),
       current_state(WAITING_FOR_HEADER),
       frames_dropped_(0),
-      numChannels(8),
-      numEnergy(4096),
-      numAux(1),
-      currentChannel(0) 
+      server_socket_(0)
     {
       // Allocate memory for the dropped frames buffer
       current_raw_packet_header_.reset(new uint8_t[Xspress::packet_header_size]);
@@ -24,9 +26,9 @@ namespace FrameReceiver {
 
       // Add channel to IP mapping
       channel_map_["192.168.0.66"] = 0;
-      channel_map_["192.168.0.70"] = 9;
-      channel_map_["192.168.0.74"] = 18;
-      channel_map_["192.168.0.78"] = 27;
+      channel_map_["192.168.0.70"] = 10;
+      channel_map_["192.168.0.74"] = 20;
+      channel_map_["192.168.0.78"] = 30;
     }
 
     XspressListModeFrameDecoder::~XspressListModeFrameDecoder() {
@@ -101,12 +103,6 @@ namespace FrameReceiver {
       }
 
       current_frame_header_ = reinterpret_cast<Xspress::ListFrameHeader*>(current_frame_buffer_);
-      //LOG4CXX_ERROR(logger_, "In process packet header");
-      //std::stringstream stream;
-      //stream << std::hex << *lptr;
-      //LOG4CXX_ERROR(logger_, "Time Frame: " << XSP_SOF_GET_FRAME(*lptr));
-      //LOG4CXX_ERROR(logger_, "Previous Time: " << XSP_SOF_GET_PREV_TIME(*lptr));
-      //LOG4CXX_ERROR(logger_, "Channel: " << XSP_SOF_GET_CHAN(*lptr));
     }
 
     void* XspressListModeFrameDecoder::get_next_payload_buffer(void) const
@@ -124,28 +120,39 @@ namespace FrameReceiver {
       return Xspress::xspress_packet_size;
     }
 
-    FrameDecoder::FrameReceiveState XspressListModeFrameDecoder::process_packet(size_t bytes_received, int socket, int port, struct sockaddr_in* from_addr)
+    FrameDecoder::FrameReceiveState XspressListModeFrameDecoder::process_packet(size_t bytes_received, int port, struct sockaddr_in* from_addr)
     {
       uint64_t *lptr = (uint64_t *)get_packet_header_buffer();
       uint64_t chan_of_card = XSP_SOF_GET_CHAN(*lptr);
       char *ip = inet_ntoa(from_addr->sin_addr);
       std::string str_ip(ip);
       uint64_t channel = channel_map_[str_ip] + chan_of_card;
-      LOG4CXX_ERROR(logger_, "Packet received from IP address: " << ip);
-      LOG4CXX_ERROR(logger_, "XSP_SOF_GET_FRAME: " << XSP_SOF_GET_FRAME(*lptr));
-      LOG4CXX_ERROR(logger_, "Channel: " << channel);
 
       if (*lptr & XSP_MASK_END_OF_FRAME){
         // Acknowledge packet to send if get a end of frame marker.
-        uint32_t tbuff[6];
+        uint32_t tbuff[XSPRESS_ACK_SIZE];
         tbuff[0] = 0;
         tbuff[1] = XSP_10GTX_SOF | XSP_10GTX_EOF; // Single packet frame
         tbuff[2] = XSP_SOF_GET_FRAME(*lptr); // Frame
         tbuff[3] = chan_of_card;
         tbuff[4] = 0; // Dummy data sent with EOF
         tbuff[5] = 0; // Dummy data sent with EOF
-        LOG4CXX_ERROR(logger_, "Sending ack for channel: " << chan_of_card);
-        write(socket, tbuff, sizeof(u_int32_t)*6); // Send ack to same port data came from. hardware set to filter on destination port which is the same om the FEM for all channels.
+        LOG4CXX_DEBUG_LEVEL(1, logger_, "Sending ack for channel: " << chan_of_card << " socket: " << ip << ":" << port);
+
+        // If the reply socket has not been created yet then do so now
+        if (server_socket_ == 0){
+          server_address_.sin_family = AF_INET;
+          (server_address_.sin_addr).s_addr = inet_addr(ip);
+          server_address_.sin_port = htons(XSPRESS_ACK_PORT);
+
+          socklen_t addr_size = sizeof(server_address_);
+
+          server_socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+          connect(server_socket_, (struct sockaddr *)&server_address_, addr_size);
+        }
+        // Send ack to ACK_PORT, same address EOF packet came from.
+        // Hardware set to filter on destination port which is the same on the FEM for all channels.
+        write(server_socket_, tbuff, sizeof(u_int32_t)*XSPRESS_ACK_SIZE);
       }
 
       // Set the size of the packet in the frame header
@@ -190,15 +197,5 @@ namespace FrameReceiver {
     {
       return current_raw_packet_header_.get();
     }
-
-    //uint32_t get_frame_number(void) const
-    //{
-    //
-    //}
-
-    //uint32_t get_packet_number(void) const
-    //{
-    //
-    //}
 
 }

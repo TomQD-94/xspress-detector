@@ -48,7 +48,7 @@ class XspressListModeFrameDecoder : public FrameDecoderUDP {
 
     void* get_next_payload_buffer(void) const;
     size_t get_next_payload_size(void) const;
-    FrameDecoder::FrameReceiveState process_packet(size_t bytes_received, int socket, int port, struct sockaddr_in* from_addr);
+    FrameDecoder::FrameReceiveState process_packet(size_t bytes_received, int port, struct sockaddr_in* from_addr);
 
     void monitor_buffers(void);
     void get_status(const std::string param_prefix, OdinData::IpcMessage& status_msg);
@@ -72,12 +72,9 @@ class XspressListModeFrameDecoder : public FrameDecoderUDP {
     enum XspressState current_state;
     // statistics
     unsigned int frames_dropped_;
-    size_t numChannels;
-    uint32_t numEnergy;
-    uint32_t numAux;
-    size_t currentChannel;
     std::map<std::string, uint32_t> channel_map_;
-
+    struct sockaddr_in server_address_;
+    int server_socket_;
   };
 
 }
