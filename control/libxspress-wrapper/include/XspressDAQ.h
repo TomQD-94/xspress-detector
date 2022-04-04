@@ -68,6 +68,7 @@ public:
   boost::shared_ptr<XspressDAQTask> create_task(uint32_t type, uint32_t value1);
   boost::shared_ptr<XspressDAQTask> create_task(uint32_t type, uint32_t value1, uint32_t value2);
   void startAcquisition(uint32_t frames);
+  void stopAcquisition();
   bool getAcqRunning();
   uint32_t getFramesRead();
   void controlTask();
@@ -107,6 +108,8 @@ private:
 
   /** Buffer length value */
   uint32_t                      buffer_length_;
+  /** Are we waiting for an acquisition to start */
+  bool waiting_for_acq_;
   /** Is the DAQ thread running an acquisition */
   bool acq_running_;
   /** Number of frames read out of shared memory in current acquisition */

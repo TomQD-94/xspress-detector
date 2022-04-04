@@ -510,6 +510,12 @@ int XspressDetector::stopAcquisition()
 {
   int status = XSP_STATUS_OK;
   if (acquiring_){
+    if (xsp_mode_ == XSP_MODE_MCA){
+      // If the DAQ object exists then stop any acquisition loop
+      if (daq_){
+        daq_->stopAcquisition();
+      }
+    }
     status = detector_.histogram_stop(-1);
   }
   return status;

@@ -28,6 +28,7 @@ XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr,
                        uint32_t num_channels,
                        uint32_t num_spectra,
                        std::vector<std::string> endpoints):
+    waiting_for_acq_(true),
     acq_running_(false),
     no_of_frames_(0),
     logger_(log4cxx::Logger::getLogger("Xspress.XspressDAQ"))
@@ -195,6 +196,17 @@ void XspressDAQ::startAcquisition(uint32_t frames)
   ctrl_queue_->add(create_task(DAQ_TASK_TYPE_START, frames), true);
 }
 
+void XspressDAQ::stopAcquisition()
+{
+  // Set the acquisition running flag to false
+  acq_running_ = false;
+  // Wait for the acquisition to fall into the ready state
+  while (!waiting_for_acq_){
+    // We need to wait for the acquisition loop to abort
+    sleep(0.001);
+  }
+}
+
 bool XspressDAQ::getAcqRunning()
 {
   return acq_running_;
@@ -210,7 +222,10 @@ void XspressDAQ::controlTask()
   LOG4CXX_INFO(logger_, "Starting control task with ID [" << boost::this_thread::get_id() << "]");
   bool executing = true;
   while (executing){
+    waiting_for_acq_ = true;
+    LOG4CXX_INFO(logger_, "DAQ ctrl thread waiting for acquisition start");
     boost::shared_ptr<XspressDAQTask> task = ctrl_queue_->remove();
+    waiting_for_acq_ = false;
     if (task->type_ == DAQ_TASK_TYPE_START){
       int32_t total_frames = task->value1_;
       LOG4CXX_INFO(logger_, "DAQ ctrl thread started with [" << total_frames << "] frames");
