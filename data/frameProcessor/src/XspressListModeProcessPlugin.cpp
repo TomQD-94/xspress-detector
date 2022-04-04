@@ -14,6 +14,17 @@ const std::string XspressListModeProcessPlugin::CONFIG_CHANNELS =           "cha
 const std::string XspressListModeProcessPlugin::CONFIG_RESET_ACQUISITION =  "reset";
 const std::string XspressListModeProcessPlugin::CONFIG_FRAME_SIZE =         "frame_size";
 
+#define XSP3_10GTX_SOF 0x80000000
+#define XSP3_10GTX_EOF 0x40000000
+#define XSP3_10GTX_PAD 0x20000000
+#define XSP3_10GTX_PACKET_MASK 0x0FFFFFFF
+
+
+#define XSP3_HGT64_SOF_GET_FRAME(x)       (((x)>>0)&0xFFFFFF)     //!< Get time frame from first (header) word
+#define XSP3_HGT64_SOF_GET_PREV_TIME(x)   (((x)>>24)&0xFFFFFFFF)  //!< Get total integration time from previous time frame from first (header) word
+#define XSP3_HGT64_SOF_GET_CHAN(x)        (((x)>>60)&0xF)         //!< Get channel number from first (header) word
+
+#define XSP3_HGT64_MASK_END_OF_FRAME			(1L<<59)
 
 XspressListModeMemoryBlock::XspressListModeMemoryBlock(const std::string& name) :
   ptr_(0),
@@ -243,6 +254,27 @@ void XspressListModeProcessPlugin::setup_memory_allocation()
     boost::shared_ptr<XspressListModeMemoryBlock> ptr = boost::shared_ptr<XspressListModeMemoryBlock>(new XspressListModeMemoryBlock(ss.str()));
     ptr->set_size(frame_size_bytes_);
     memory_ptrs_[*iter] = ptr;
+    // Setup the storage vectors for the packet header information
+    std::vector<uint32_t> hdr(3, 0);
+    packet_headers_[*iter] = hdr;
+  }
+}
+
+/**
+ * Collate status information for the plugin. The status is added to the status IpcMessage object.
+ *
+ * \param[out] status - Reference to an IpcMessage value to store the status.
+ */
+void XspressListModeProcessPlugin::status(OdinData::IpcMessage& status)
+{
+  std::map<uint32_t, std::vector<uint32_t> >::iterator iter;
+  for (iter = packet_headers_.begin(); iter != packet_headers_.end(); ++iter){
+    std::stringstream ss;
+    ss << "channel_" << iter->first;
+    std::vector<uint32_t> hdr = iter->second;
+    for (int index = 0; index < hdr.size(); index++){
+      status.set_param(get_name() + "/" + ss.str() + "[]", hdr[index]);
+    }
   }
 }
 
@@ -263,21 +295,42 @@ void XspressListModeProcessPlugin::process_frame(boost::shared_ptr <Frame> frame
   // Peek at incoming words
   uint64_t *peek_ptr = (uint64_t *)data_ptr;
 
-  LOG4CXX_DEBUG_LEVEL(3, logger_, "Peek at first few words");
-  LOG4CXX_DEBUG_LEVEL(3, logger_, " >> " << peek_ptr[0]);
-  LOG4CXX_DEBUG_LEVEL(3, logger_, " >> " << peek_ptr[1]);
-  LOG4CXX_DEBUG_LEVEL(3, logger_, " >> " << peek_ptr[2]);
+  LOG4CXX_DEBUG_LEVEL(3, logger_, " Ch: " << channel
+  << " FRAME: " << std::dec << XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0])
+  << " PREV_TIME: " << std::dec << XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0])
+  << " CHAN: " << std::dec << XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0]));
 
-  // Place the bytes into the store
-  boost::shared_ptr <Frame> list_frame = (memory_ptrs_[channel])->add_block(pkt_size, data_ptr);
+//  if (pkt_size < 100){
+//    LOG4CXX_DEBUG_LEVEL(0, logger_, "Received " << pkt_size << " bytes from channel " << channel);
+//    LOG4CXX_DEBUG_LEVEL(0, logger_, " Ch: " << channel
+//      << " FRAME: " << std::dec << XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0])
+//      << " PREV_TIME: " << std::dec << XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0])
+//      << " CHAN: " << std::dec << XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0])
+//      << " RAW: " << std::hex << peek_ptr[0]
+//      << " EOF: " << std::hex << (XSP3_HGT64_MASK_END_OF_FRAME&peek_ptr[0]));
+//  }
 
-  if (list_frame){
-    LOG4CXX_INFO(logger_, "Completed frame for channel " << channel << ", pushing");
-    // There is a full frame available for pushing
-    this->push(list_frame);
+  if (packet_headers_.count(channel) > 0){
+    packet_headers_[channel].clear();
+    packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0]));
+    packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0]));
+    packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0]));
+
+    if ((XSP3_HGT64_MASK_END_OF_FRAME&peek_ptr[0]) == XSP3_HGT64_MASK_END_OF_FRAME){
+      LOG4CXX_DEBUG_LEVEL(0, logger_, " Ch: " << channel << " EOF marker registered"); 
+    }
+    // Place the bytes into the store
+    boost::shared_ptr <Frame> list_frame = (memory_ptrs_[channel])->add_block(pkt_size, data_ptr);
+
+    if (list_frame){
+      LOG4CXX_INFO(logger_, "Completed frame for channel " << channel << ", pushing");
+      // There is a full frame available for pushing
+      this->push(list_frame);
+    }
+
+  } else {
+    LOG4CXX_ERROR(logger_, "Bad channel, this plugin is not set up for channel " << channel);
   }
-
-
 /*
   // Check the frame number
   uint32_t frame_id = header->frame_number;

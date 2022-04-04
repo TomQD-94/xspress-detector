@@ -68,6 +68,7 @@ namespace FrameProcessor
     void setup_memory_allocation();
         
     // Plugin interface
+    void status(OdinData::IpcMessage& status);
     void process_frame(boost::shared_ptr <Frame> frame);
 
     uint32_t frame_count_;
@@ -76,6 +77,7 @@ namespace FrameProcessor
     uint32_t num_channels_;
 
     std::map<uint32_t, boost::shared_ptr<XspressListModeMemoryBlock> > memory_ptrs_;
+    std::map<uint32_t, std::vector<uint32_t> > packet_headers_;
 
     static const std::string CONFIG_CHANNELS;
     static const std::string CONFIG_RESET_ACQUISITION;
