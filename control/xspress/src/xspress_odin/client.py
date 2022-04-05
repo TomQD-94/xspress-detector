@@ -59,7 +59,7 @@ class AbstractClient:
         event_type = msg['event']
         if event_type & (zmq.EVENT_CONNECTED | zmq.EVENT_HANDSHAKE_SUCCEEDED):
             self.connected = True
-            logging.info("Control Server is Connected")
+            logging.info(f"Server {self.endpoint} is Connected")
         elif event_type & zmq.EVENT_DISCONNECTED:
             self.connected = False
             logging.info("Control Server is Disconnected")
@@ -105,10 +105,19 @@ class AsyncClient(AbstractClient):
         self.recv_buffer = {}
 
         super().__init__(ip, port, self._on_recv_callback)
+    
+    async def wait_till_connected(self, timeout=1):
+        waiting_time = 0
+        time_to_sleep = 0.001 * random.random()
+        while not self.connected:
+            await asyncio.sleep(time_to_sleep)
+            if waiting_time > timeout:
+                raise TimeoutError("waiting for connection")
+            waiting_time += time_to_sleep
 
     async def send_recv(self, msg: IpcMessage, timeout=DEFAULT_TIMEOUT):
         if not self.connected:
-            raise ConnectionError(f"AsyncClient.send_recv: Failed to send msg {id}. ZMQ socket not connected.\nmessage: {msg.encode()}")
+            raise ConnectionError(f"AsyncClient.send_recv: Failed to send msg {msg}. ZMQ socket not connected.")
         id = self.get_id()
         msg.set_msg_id(id)
         self.send_buffer[id] = msg
@@ -119,9 +128,9 @@ class AsyncClient(AbstractClient):
         time_to_sleep = 0.001
         minimum_sleep_time = 0.1
         while time_elapsed <= timeout:
-            await asyncio.sleep(min(time_to_sleep, minimum_sleep_time))
+            await asyncio.sleep(time_to_sleep)
             time_elapsed += time_to_sleep
-            time_to_sleep *= 2
+            time_to_sleep = time_to_sleep * 2 if time_to_sleep <= minimum_sleep_time else minimum_sleep_time
             if id in self.recv_buffer:
                 self.send_buffer.pop(id)
                 return self.recv_buffer.pop(id)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import getpass
 import inspect
@@ -6,6 +7,7 @@ from enum import Enum
 from functools import partial
 from datetime import datetime
 
+from odin.adapters.adapter import ApiAdapterRequest, ApiAdapter
 from odin_data.ipc_message import IpcMessage
 from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
@@ -517,6 +519,115 @@ class XspressDetector(object):
         }
         self.put_parameter_tree = ParameterTree(self.put_tree)
 
+    def set_fr_handler(self, handler):
+        self.fr_handler: ApiAdapter = handler
+        self.logger.error(f"self.fr_handler set to {handler}")
+        req = ApiAdapterRequest(None, accept='application/json')
+        resp = self.fr_handler.get(path="config", request=req).data
+        logging.error(f"recieved from fr adaptor: {resp}")
+
+    def set_fp_handler(self, handler):
+        self.fp_handler: ApiAdapter = handler
+        self.logger.error(f"self.fp_handler set to {handler}")
+        req = ApiAdapterRequest(None, accept='application/json')
+        resp = self.fr_handler.get(path="config", request=req).data
+        logging.error(f"recieved from fr adaptor: {resp}")
+    
+    async def configure_frs_fps(self, mode: int):
+        port_mapping = [
+            {
+                "ip": "192.168.0.65",
+                "ports": "30125,30126,30127,30128,30129,"
+            },
+            {
+                "ip": "192.168.0.65",
+                "ports": "30130,30131,30132,30133,30134,"
+            },
+            {
+                "ip": "192.168.0.69",
+                "ports": "30125,30126,30127,30128,30129,"
+            },
+            {
+                "ip": "192.168.0.69",
+                "ports": "30130,30131,30132,30133,30134,"
+            },
+            {
+                "ip": "192.168.0.73",
+                "ports": "30125,30126,30127,30128,30129,"
+            },
+            {
+                "ip": "192.168.0.73",
+                "ports": "30130,30131,30132,30133,30134,"
+            },
+            {
+                "ip": "192.168.0.77",
+                "ports": "30125,30126,30127,30128,30129,"
+            },
+            {
+                "ip": "192.168.0.77",
+                "ports": "30130,30131,30132,30133,30134,"
+            }
+        ]
+
+            
+        if mode == XSPRESS_MODE_LIST:
+            fp_req = ApiAdapterRequest('{"index":"list"}')
+            resp = self.fp_handler.put(path="config/execute", request=fp_req)
+            logging.error(f"response from fp_handler: {resp.status_code}, {resp.data}")
+            port_config = \
+            { f"{10000+(index*10)}" :
+                {
+                    "rx_ports": port_mapping[index]['ports'],
+                    "rx_type": "udp",
+                    "decoder_type": "XspressListMode",
+                    "rx_address": port_mapping[index]['ip'],
+                    "rx_recv_buffer_size":30000000
+                }
+                for index in range(8)
+            }
+        elif mode == XSPRESS_MODE_MCA:
+            fp_req = ApiAdapterRequest('{"index":"mca"}')
+            resp = self.fp_handler.put(path="config/execute", request=fp_req)
+            logging.error(f"response from fp_handler: {resp.status_code}, {resp.data}")
+            port_config = \
+            { f"{10000+(index*10)}": 
+                {
+                    "rx_ports": "{},".format(index + 15150),
+                    "rx_type": "zmq",
+                    "decoder_type": "Xspress",
+                    "rx_address": "127.0.0.1"
+                }
+                for index in range(9)
+            }
+        else:
+            raise ValueError("invalid mode requested")
+
+        tasks = ()
+        for port, config in port_config.items():
+            client = AsyncClient("127.0.0.1", port)
+            tasks += (asyncio.create_task(self.async_send_task(client, config)),)
+        result = await asyncio.gather(*tasks)
+        [logging.error(f"recieved reply: {r}") for r in result]
+    
+    async def async_send_task(self, client, config):
+        await client.wait_till_connected()
+        msg = self._build_message(MessageType.CONFIG_XSP, config)
+        resp = await client.send_recv(msg)
+        if resp.get_msg_type() == resp.NACK:
+            raise NotAcknowledgeException()
+        return resp
+
+
+    async def reconfigure(self, *unused):
+        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_DISCONNECT, 1)
+        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT, 1)
+        if self.mode == XSPRESS_MODE_MCA:
+            await self.configure_frs_fps(XSPRESS_MODE_MCA)
+            resp = await self._async_client.send_recv(self.initial_daq_msg)
+        else:
+            await self.configure_frs_fps(XSPRESS_MODE_LIST)
+        return resp
+
     async def acquire(self, value, *unused):
         if value:
             reply = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_START, 1)
@@ -528,7 +639,7 @@ class XspressDetector(object):
     async def set_mode(self, value):
         if value == 0:
             return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MODE, XSPRESS_MODE_MCA)
-        else: # value == "list"
+        else: # mode == "list"
             return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MODE, XSPRESS_MODE_LIST)
 
     async def set_exposure(self, time: float):
@@ -540,12 +651,6 @@ class XspressDetector(object):
             ))
         return await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_EXPOSURE_TIME, time)
     
-    async def reconfigure(self, *unused):
-        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_DISCONNECT, 1)
-        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT, 1)
-        if self.mode == XSPRESS_MODE_MCA:
-            resp = await self._async_client.send_recv(self.initial_daq_msg)
-        return resp
 
 
     def do_updates(self, value: int):

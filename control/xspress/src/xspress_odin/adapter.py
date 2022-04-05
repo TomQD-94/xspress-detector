@@ -51,7 +51,7 @@ class XspressAdapter(AsyncApiAdapter):
             endpoint = self.options['endpoint']
             ip, port = endpoint.split(":")
             self.detector = XspressDetector(ip, port)
-            logging.info(f"instaciated XspressDetector with ip = {ip} and port {port}")
+            logging.info(f"instatiated XspressDetector with ip = {ip} and port {port}")
 
             num_cards = int(self.options['num_cards'])
             num_tf = int(self.options["num_tf"])
@@ -147,3 +147,9 @@ class XspressAdapter(AsyncApiAdapter):
 
 
         return ApiAdapterResponse(response, status_code=status_code)
+
+    def initialize(self, adapters):
+        fr_adapter = adapters["fr"]
+        fp_adapter = adapters["fp"]
+        self.detector.set_fr_handler(fr_adapter)
+        self.detector.set_fp_handler(fp_adapter)
