@@ -9,6 +9,8 @@ odin-control = {editable = true, path = "/dls_sw/work/R3.14.12.7/support/xspress
 odin-data = {editable = true, path = "/dls_sw/work/R3.14.12.7/support/xspress-odin/odin-data/tools/python"}
 
 [dev-packages]
+pytest = "*"
+pytest-asyncio = "*"
 
 [pipenv]
 allow_prereleases = true
