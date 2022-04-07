@@ -2,10 +2,12 @@ import asyncio
 import logging
 import getpass
 import inspect
+import time
 
 from enum import Enum
 from functools import partial
 from datetime import datetime
+from contextlib import suppress
 
 from odin.adapters.adapter import ApiAdapterRequest, ApiAdapter
 from odin_data.ipc_message import IpcMessage
@@ -25,6 +27,9 @@ XSPRESS_MODE_LIST = "list"
 XSPRESS_EXPOSURE_LOWER_LIMIT = 1./1000000
 XSPRESS_EXPOSURE_UPPER_LIMIT = 20.0
 
+NUM_FR_MCA = 9
+NUM_FR_LIST = 8
+
 def is_coroutine(object):
     """
     see: https://stackoverflow.com/questions/67020609/partial-of-a-class-coroutine-isnt-a-coroutine-why
@@ -33,49 +38,55 @@ def is_coroutine(object):
         object = object.func
     return inspect.iscoroutinefunction(object)
 
-class AuotoPeriodicCallback(object):
-    """
-    Automatically start and stop the periodic callbacks based on the value of another callback (predicate).
-    In order to start/stop the main callback in time, the predicate will be checked at time/2.
-    """
-    def __init__(self, callback, predicate, time_seconds, time_min=0.01):
-        self.time_min = time_min
-        self.check_time_valid(time_seconds)
+class AsyncPeriodicJob:
+    def __init__(self, callback, time_seconds, time_min=0.001):
         self.callback = callback
-        self.predicate = predicate
-        callback_time = time_seconds*1000
-        predicate_time = callback_time/2.0
-        self.callback_sched = PeriodicCallback(self.callback, callback_time)
-        self.predicate_sched = PeriodicCallback(self._auto_callback, predicate_time)
+        self._time_min = time_min
+        self.time = 1
+        self.set_time(time_seconds)
+        self._running = False
+        self._task = None
 
-    def check_time_valid(self, time):
-        if time < self.time_min:
-            raise ValueError("Time provided is smaller than limit")
-
-    def _auto_callback(self):
-        if self.callback_sched.is_running() and not self.predicate():
-            self.callback_sched.stop()
-        elif not self.callback_sched.is_running() and self.predicate():
-            self.callback_sched.start()
+        self._last_logging_time = 0
+        self.logging_interval = 2
 
     def start(self):
-        self.predicate_sched.start()
+        if not self._running:
+            # Start task to call func periodically:
+            self._task = asyncio.ensure_future(self._run())
+            self._running = True
+    
+    async def stop(self):
+        if self._running:
+            # Stop task and await it stopped:
+            self._task.cancel()
+            self._running = False
+            with suppress(asyncio.CancelledError):
+                await self._task
 
-    def stop(self):
-        self.predicate_sched.stop()
-        self.callback_sched.stop()
+    async def _run(self):
+        while True:
+            try:
+                await self.callback()
+            except Exception as e:
+                current = time.time()
+                if current - self._last_logging_time > self.logging_interval:
+                    logging.error(f"{self.__class__}._run: raised and cought exception{e}")
+                    self._last_logging_time = current
+            await asyncio.sleep(self.time)
 
     def is_running(self):
-        return self.predicate_sched.is_running()
+        return self._running
 
-    def set_time(self, time_seconds: float):
-        self.check_time_valid(time_seconds)
-        time = time_seconds*1000
-        self.callback_sched.callback_time = time
-        self.predicate_sched.callback_time = time/2.0
+    def set_time(self, time):
+        if time < self._time_min:
+            logging.warning(f"{self.__class__}.__init__: setting time to minimum allowed = {self._time_min}")
+            self.time = self._time_min
+        else:
+            self.time = time
 
     def get_time(self):
-        return self.callback_sched.callback_time / 1000.0
+        return self.time
 
 
 class MessageType(Enum):
@@ -247,11 +258,11 @@ class XspressDetector(object):
         self.username = getpass.getuser()
         self.config_raw : dict = {}
 
-        self._callback_client = CallbackClient(ip, port, self.on_recv_callback)
         self._async_client = AsyncClient(ip, port)
         self.timeout = 1
         self.xsp_connected: bool = False
-        self.sched = AuotoPeriodicCallback(self.read_config, self._callback_client.is_connected, UPDATE_PARAMS_PERIOD_SECONDS)
+        self.sched = AsyncPeriodicJob(self.read_config, UPDATE_PARAMS_PERIOD_SECONDS)
+
 
         # root level parameter tree members
         self.ctr_endpoint = ENDPOINT_TEMPLATE.format(ip, port)
@@ -360,7 +371,7 @@ class XspressDetector(object):
             XspressDetectorStr.CONFIG_ADAPTER : {
                 XspressDetectorStr.CONFIG_ADAPTER_START_TIME:     (lambda: self.start_time.strftime("%B %d, %Y %H:%M:%S"), {}),
                 XspressDetectorStr.CONFIG_ADAPTER_UP_TIME:        (lambda: str(datetime.now() - self.start_time), {}),
-                XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (self._callback_client.is_connected, {}),
+                XspressDetectorStr.CONFIG_ADAPTER_CONNECTED:      (self._async_client.is_connected, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_USERNAME:       (lambda: self.username, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_SCAN:           (self.sched.get_time, {}),
                 XspressDetectorStr.CONFIG_ADAPTER_CONFIG_RAW:     (lambda: self.config_raw, {}),
@@ -370,7 +381,7 @@ class XspressDetector(object):
                 XspressDetectorStr.STATUS_SENSOR : {
                     XspressDetectorStr.STATUS_SENSOR_HEIGHT: (lambda: self.max_channels, {}),
                     XspressDetectorStr.STATUS_SENSOR_WIDTH: (lambda: self.max_spectra, {}),
-                    XspressDetectorStr.STATUS_SENSOR_BYTES: (lambda: self.max_spectra * self.max_spectra * 4, {}), # 4 bytes per int32 point
+                    XspressDetectorStr.STATUS_SENSOR_BYTES: (lambda: self.max_spectra * self.max_channels * 4, {}), # 4 bytes per int32 point
                 },
                 XspressDetectorStr.STATUS_MANUFACTURER: (lambda: "Quantum Detectors", {}),
                 XspressDetectorStr.STATUS_MODEL: (lambda: "Xspress 4", {}),
@@ -574,8 +585,8 @@ class XspressDetector(object):
             fp_req = ApiAdapterRequest('{"index":"list"}')
             resp = self.fp_handler.put(path="config/execute", request=fp_req)
             logging.error(f"response from fp_handler: {resp.status_code}, {resp.data}")
-            port_config = \
-            { f"{10000+(index*10)}" :
+            configs = \
+            [
                 {
                     "rx_ports": port_mapping[index]['ports'],
                     "rx_type": "udp",
@@ -583,35 +594,35 @@ class XspressDetector(object):
                     "rx_address": port_mapping[index]['ip'],
                     "rx_recv_buffer_size":30000000
                 }
-                for index in range(8)
-            }
+                for index in range(NUM_FR_LIST)
+            ]
         elif mode == XSPRESS_MODE_MCA:
             fp_req = ApiAdapterRequest('{"index":"mca"}')
             resp = self.fp_handler.put(path="config/execute", request=fp_req)
             logging.error(f"response from fp_handler: {resp.status_code}, {resp.data}")
-            port_config = \
-            { f"{10000+(index*10)}": 
+            configs = \
+            [
                 {
                     "rx_ports": "{},".format(index + 15150),
                     "rx_type": "zmq",
                     "decoder_type": "Xspress",
                     "rx_address": "127.0.0.1"
                 }
-                for index in range(9)
-            }
+                for index in range(NUM_FR_MCA)
+            ]
         else:
             raise ValueError("invalid mode requested")
 
         tasks = ()
-        for port, config in port_config.items():
-            client = AsyncClient("127.0.0.1", port)
+        for client, config in zip(self.fr_clients, configs):
             tasks += (asyncio.create_task(self.async_send_task(client, config)),)
         result = await asyncio.gather(*tasks)
         [logging.error(f"recieved reply: {r}") for r in result]
     
     async def async_send_task(self, client, config):
+        msg = IpcMessage("cmd", "configure")
+        msg.set_params(config)
         await client.wait_till_connected()
-        msg = self._build_message(MessageType.CONFIG_XSP, config)
         resp = await client.send_recv(msg)
         if resp.get_msg_type() == resp.NACK:
             raise NotAcknowledgeException()
@@ -620,12 +631,14 @@ class XspressDetector(object):
 
     async def reconfigure(self, *unused):
         resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_DISCONNECT, 1)
-        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT, 1)
         if self.mode == XSPRESS_MODE_MCA:
             await self.configure_frs_fps(XSPRESS_MODE_MCA)
-            resp = await self._async_client.send_recv(self.initial_daq_msg)
         else:
             await self.configure_frs_fps(XSPRESS_MODE_LIST)
+        await asyncio.sleep(0.1)
+        resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT, 1)
+        if self.mode == XSPRESS_MODE_MCA:
+            resp = await self._async_client.send_recv(self.initial_daq_msg)
         return resp
 
     async def acquire(self, value, *unused):
@@ -653,11 +666,11 @@ class XspressDetector(object):
     
 
 
-    def do_updates(self, value: int):
+    async def do_updates(self, value: int):
         if value:
             self.sched.start()
         else:
-            self.sched.stop()
+            await self.sched.stop()
 
     def _set(self, attr_name, value):
         setattr(self, attr_name, value)
@@ -707,6 +720,8 @@ class XspressDetector(object):
         callback = callback[1]
         if is_coroutine(callback):
             resp = await callback(data)
+            if resp is None:
+                return {f"called {callback.__name__}":None}
             if resp.get_msg_type() == resp.NACK:
                 raise NotAcknowledgeException(f"failed to set {data} to {path} on the control server:\nMessge recieved: {resp}")
             return resp.encode()
@@ -722,41 +737,6 @@ class XspressDetector(object):
             self.logger.error(f"parameter_tree error: {e}")
             raise LookupError(e)
 
-
-    def on_recv_callback(self, msg):
-        BASE_PATH = ""
-        data = _cast_str(msg[0])
-        self.logger.debug(f"queue size = {self._callback_client.get_queue_size()}")
-        self.logger.debug(f"message recieved = {data}")
-        ipc_msg : IpcMessage = IpcMessage(from_str=data)
-
-        if not ipc_msg.is_valid():
-            raise XspressDetectorException("IpcMessage recieved is not valid")
-        if ipc_msg.get_msg_val() == XspressDetectorStr.CONFIG_REQUEST:
-            self.config_raw = ipc_msg.get_params()
-            if ipc_msg.get_msg_type() == IpcMessage.ACK and ipc_msg.get_params():
-                self._param_tree_set_recursive(BASE_PATH, ipc_msg.get_params())
-            else:
-                pass
-
-    def _param_tree_set_recursive(self, path, params):
-        if not isinstance(params, dict):
-            try:
-                path = path.strip("/")
-                self.parameter_tree.set(path, params)
-                # self.logger.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
-            except ParameterTreeError as e:
-                self.logger.error(e)
-                self.logger.warning(
-                    (
-                        f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree\n"
-                        f"params = {params}"
-                    )
-                )
-                pass
-        else:
-            for param_name, params in params.items():
-                self._param_tree_set_recursive(f"{path}/{param_name}", params)
 
     def configure(self,
         num_cards,
@@ -779,6 +759,8 @@ class XspressDetector(object):
         self.run_flags = run_flags
         self.debug = debug
         self.endpoints = daq_endpoints
+        # TODO: take number of FRs as input to configure
+        self.fr_clients = [AsyncClient("127.0.0.1", 10000+(10*port_offset)) for port_offset in range(NUM_FR_MCA)]
 
         x = XspressDetectorStr
         config = {
@@ -805,27 +787,6 @@ class XspressDetector(object):
         return resp
         
 
-
-    def _connect(self):
-        command = { "connect": None }
-        command_message = self._build_message(MessageType.CMD, command)
-
-        self._callback_client.send(command_message)
-        # success, _ = self._client.send_configuration(command_message, target=XspressDetectorStr.CONFIG_CMD)
-        # if not success:
-        #     self.connected = False
-        #     self.logger.error("could not connect to Xspress")
-        #     raise XspressDetectorException("could not connect to the xspress unit")
-        self.connected = True
-        self._restore()
-
-
-    def _restore(self):
-        command = { "restore": None }
-        command_message = self._build_message(MessageType.CMD, command)
-        # success, reply =  self._client.send_configuration(command_message, target=XspressDetectorStr.CONFIG_CMD)
-        self._callback_client.send(command_message)
-
     def _build_message_single(self, param_str: str, value: any):
         msg = IpcMessage("cmd", "configure")
         msg.set_param(param_str, value)
@@ -849,7 +810,32 @@ class XspressDetector(object):
         msg.set_param(params_group, config)
         return msg
 
-    def read_config(self, *unused):
-        self._callback_client.send(self._build_message(MessageType.REQUEST))
+    async def read_config(self, *unused):
+        msg = self._build_message(MessageType.REQUEST)
+        ipc_msg = await self._async_client.send_recv(msg, loud=False)
+        BASE_PATH = ""
+        if not ipc_msg.is_valid():
+            raise XspressDetectorException("IpcMessage recieved is not valid")
+        self.config_raw = ipc_msg.get_params()
+        self._param_tree_set_recursive(BASE_PATH, ipc_msg.get_params())
+        return ipc_msg
 
+    def _param_tree_set_recursive(self, path, params):
+        if not isinstance(params, dict):
+            try:
+                path = path.strip("/")
+                self.parameter_tree.set(path, params)
+                # self.logger.debug(f"XspressDetector._param_tree_set_recursive: parameter path {path} was set to {params}")
+            except ParameterTreeError as e:
+                self.logger.error(e)
+                self.logger.warning(
+                    (
+                        f"XspressDetector._param_tree_set_recursive: parameter path {path} is not in parameter tree\n"
+                        f"params = {params}"
+                    )
+                )
+                pass
+        else:
+            for param_name, params in params.items():
+                self._param_tree_set_recursive(f"{path}/{param_name}", params)
 
