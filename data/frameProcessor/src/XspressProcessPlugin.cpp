@@ -351,6 +351,12 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   uint32_t *dest_ptr = (uint32_t *)scalar_memblock_;
   dest_ptr += (num_scalar_values * num_scalars_recorded_);
   memcpy(dest_ptr, sca_ptr, num_scalar_values * sizeof(uint32_t));
+  double *dest_dtc_ptr = (double *)dtc_memblock_;
+  dest_dtc_ptr += (num_dtc_factors * num_scalars_recorded_);
+  memcpy(dest_dtc_ptr, dtc_ptr, num_dtc_factors * sizeof(double));
+  double *dest_inp_est_ptr = (double *)inp_est_memblock_;
+  dest_inp_est_ptr += (num_inp_est * num_scalars_recorded_);
+  memcpy(dest_inp_est_ptr, inp_est_ptr, num_inp_est * sizeof(double));
   num_scalars_recorded_ += 1;
 
   // Calculate the elapsed time since we last posted meta data
@@ -411,7 +417,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
       // Check if we are writing out the last block which is not full size
       if (frame_id == (num_frames_-1)){
         LOG4CXX_DEBUG_LEVEL(3, logger_, "num_frames_ - 1: " << (num_frames_-1));
-        // As this is the last frame block to send post the scalar buffer as well
+        // As this is the last frame block to send, post the scalar buffer as well
         send_scalars(header->num_scalars, header->first_channel, header->num_channels);
 
         dimensions_t mca_dims;
