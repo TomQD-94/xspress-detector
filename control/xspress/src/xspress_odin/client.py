@@ -117,14 +117,14 @@ class AsyncClient(AbstractClient):
 
     async def send_recv(self, msg: IpcMessage, timeout=DEFAULT_TIMEOUT, loud=True):
         if not self.connected:
-            raise ConnectionError(f"AsyncClient.send_recv: Failed to send msg {msg}. ZMQ socket not connected.")
+            raise ConnectionError(f"AsyncClient.send_recv ({self.endpoint}): Failed to send msg {msg}. ZMQ socket not connected.")
         id = self.get_id()
         msg.set_msg_id(id)
         self.send_buffer[id] = msg
         if loud:
-            logging.info("Sending message:\n%s", msg.encode())
+            logging.info(f"Sending message to {self.endpoint}:\n%s", msg.encode())
         else:
-            logging.debug("Sending message:\n%s", msg.encode())
+            logging.debug(f"Sending message to {self.endpoint}:\n%s", msg.encode())
         self.stream.send(cast_bytes(msg.encode()))
 
         time_elapsed = 0

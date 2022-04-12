@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import logging
 import getpass
 import inspect
@@ -13,9 +14,8 @@ from odin.adapters.adapter import ApiAdapterRequest, ApiAdapter
 from odin_data.ipc_message import IpcMessage
 from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
-from tornado.ioloop import PeriodicCallback
 
-from .client import AsyncClient, CallbackClient
+from .client import AsyncClient
 from .debug import debug_method
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
@@ -29,6 +29,8 @@ XSPRESS_EXPOSURE_UPPER_LIMIT = 20.0
 
 NUM_FR_MCA = 9
 NUM_FR_LIST = 8
+NUM_CHANS_PER_FP = 4
+
 
 def is_coroutine(object):
     """
@@ -544,7 +546,29 @@ class XspressDetector(object):
         resp = self.fr_handler.get(path="config", request=req).data
         logging.error(f"recieved from fr adaptor: {resp}")
     
-    async def configure_frs_fps(self, mode: int):
+    async def configure_fps(self, mode: str):
+        list_command = { "execute": {"index": "list"}}
+        mca_command = { "execute": {"index": "mca"}, "hdf":{"dataset": {}}}
+        command = mca_command if mode == XSPRESS_MODE_MCA else list_command
+        num_process = NUM_FR_MCA if mode == XSPRESS_MODE_MCA else NUM_FR_LIST
+
+        # must copy otherwise we'll modify the same dict later
+        configs = [copy.deepcopy(command) for _ in range(num_process)]
+
+        if mode == XSPRESS_MODE_MCA:
+            dataset_values = {"dims": [16, 4096], "chunks": [256, 16, 4096]} if self.use_resgrades \
+                        else {"dims": [1, 4096], "chunks": [256, 1, 4096]}
+            num_chan_per_process = self.max_channels//NUM_FR_MCA
+            for i in range(self.max_channels):
+                fp_index = i//num_chan_per_process
+                configs[fp_index]["hdf"]["dataset"][f"mca_{i}"] = dataset_values
+
+        tasks = ()
+        for client, config in zip(self.fp_clients, configs):
+            tasks += (asyncio.create_task(self.async_send_task(client, config)),)
+        result = await asyncio.gather(*tasks)
+
+    async def configure_frs(self, mode: int):
         port_mapping = [
             {
                 "ip": "192.168.0.65",
@@ -582,9 +606,6 @@ class XspressDetector(object):
 
             
         if mode == XSPRESS_MODE_LIST:
-            fp_req = ApiAdapterRequest('{"index":"list"}')
-            resp = self.fp_handler.put(path="config/execute", request=fp_req)
-            logging.error(f"response from fp_handler: {resp.status_code}, {resp.data}")
             configs = \
             [
                 {
@@ -597,9 +618,6 @@ class XspressDetector(object):
                 for index in range(NUM_FR_LIST)
             ]
         elif mode == XSPRESS_MODE_MCA:
-            fp_req = ApiAdapterRequest('{"index":"mca"}')
-            resp = self.fp_handler.put(path="config/execute", request=fp_req)
-            logging.error(f"response from fp_handler: {resp.status_code}, {resp.data}")
             configs = \
             [
                 {
@@ -617,7 +635,6 @@ class XspressDetector(object):
         for client, config in zip(self.fr_clients, configs):
             tasks += (asyncio.create_task(self.async_send_task(client, config)),)
         result = await asyncio.gather(*tasks)
-        [logging.error(f"recieved reply: {r}") for r in result]
     
     async def async_send_task(self, client, config):
         msg = IpcMessage("cmd", "configure")
@@ -632,9 +649,15 @@ class XspressDetector(object):
     async def reconfigure(self, *unused):
         resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_DISCONNECT, 1)
         if self.mode == XSPRESS_MODE_MCA:
-            await self.configure_frs_fps(XSPRESS_MODE_MCA)
+            await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MAX_CHANNELS, self.mca_max_channels)
+            self.max_channels = self.mca_max_channels
+            await self.configure_frs(XSPRESS_MODE_MCA)
+            await self.configure_fps(XSPRESS_MODE_MCA)
         else:
-            await self.configure_frs_fps(XSPRESS_MODE_LIST)
+            await self._put(MessageType.CONFIG_XSP, XspressDetectorStr.CONFIG_XSP_MAX_CHANNELS, self.mca_max_channels+1)
+            self.max_channels = self.mca_max_channels + 1
+            await self.configure_frs(XSPRESS_MODE_LIST)
+            await self.configure_fps(XSPRESS_MODE_LIST)
         await asyncio.sleep(0.1)
         resp = await self._put(MessageType.CMD, XspressDetectorStr.CONFIG_CMD_CONNECT, 1)
         if self.mode == XSPRESS_MODE_MCA:
@@ -754,13 +777,15 @@ class XspressDetector(object):
         self.num_tf = num_tf
         self.base_ip = base_ip
         self.max_channels = max_channels
+        self.mca_max_channels = max_channels
         self.max_spectra = max_spectra
         self.settings_path = settings_path
         self.run_flags = run_flags
         self.debug = debug
         self.endpoints = daq_endpoints
-        # TODO: take number of FRs as input to configure
+        # TODO: take number of FRs/FPs as input to configure
         self.fr_clients = [AsyncClient("127.0.0.1", 10000+(10*port_offset)) for port_offset in range(NUM_FR_MCA)]
+        self.fp_clients = [AsyncClient("127.0.0.1", 10004+(10*port_offset)) for port_offset in range(NUM_FR_MCA)]
 
         x = XspressDetectorStr
         config = {
