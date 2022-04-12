@@ -84,7 +84,7 @@ std::string LibXspressWrapper::getErrorString()
 
 void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code)
 {
-  checkErrorCode(prefix, code, false);
+  checkErrorCode(prefix, code, true);
 }
 
 void LibXspressWrapper::checkErrorCode(const std::string& prefix, int code, bool add_xsp_error)
@@ -226,7 +226,7 @@ int LibXspressWrapper::close_connection()
   int xsp_status = 0;
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper calling xsp3_close");
 
-  xsp_status = xsp3_close(xsp_handle_);
+  xsp_status = xsp3_close(xsp_handle_, Xsp3UnlinkAll);
 
   if (xsp_status != XSP3_OK) {
     checkErrorCode("xsp3_close", xsp_status);

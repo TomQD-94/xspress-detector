@@ -11,8 +11,6 @@
 #include "XspressDetector.h"
 #include "DebugLevelLogger.h"
 
-#define SHM_FILE_PATH "/dev/shm/xsp3_scalers0"
-
 namespace Xspress
 {
 /** Construct a new XspressDetector class.
@@ -43,8 +41,8 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_invert_f0_(0),
     xsp_invert_veto_(0),
     xsp_debounce_(0),
-    xsp_exposure_time_(0.0),
-    xsp_frames_(0),
+    xsp_exposure_time_(1.0),
+    xsp_frames_(1),
     xsp_mode_(XSP_MODE_MCA)
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
@@ -110,6 +108,7 @@ int XspressDetector::connect_mca_mode()
   connected_ = false;
 
   // Check the IP address is not empty
+  LOG4CXX_DEBUG_LEVEL(0, logger_, "Connecting to IP: " + xsp_base_IP_);
   if (xsp_base_IP_ == ""){
     setErrorString("No connection IP address has been set");
     status = XSP_STATUS_ERROR;
@@ -178,10 +177,6 @@ int XspressDetector::disconnect()
     if (status == XSP_STATUS_OK){
       // We have disconnected from the detector
       LOG4CXX_INFO(logger_, "Disconnected from Xspress");
-      // Now we must attempt to unlink the shared memory file
-      if (unlink(SHM_FILE_PATH) < 0){
-        LOG4CXX_ERROR(logger_, "Could not unlink the shared memory file " << SHM_FILE_PATH);
-      }
       connected_ = false;
     }
 
