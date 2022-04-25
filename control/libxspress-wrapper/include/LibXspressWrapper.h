@@ -99,7 +99,7 @@ public:
 
   int save_settings(const std::string& save_path);
   int restore_settings(const std::string& restore_path);
-  int setup_resgrades(bool use_resgrades, int max_channels, int& num_aux_data);
+  int setup_format_run_mode(bool list_mode, bool use_resgrades, int max_channels, int& num_aux_data);
   int set_run_flags(int run_flags);
   int set_dtc_energy(double dtc_energy);
   int get_clock_period(double& clock_period);
@@ -190,6 +190,7 @@ public:
                               uint32_t *buffer_length);
   int set_window(int chan, int sca, int llm, int hlm);
   int set_sca_thresh(int chan, int value);
+  int set_trigger_input(bool list_mode);
 
   static const int runFlag_MCA_SPECTRA_;
   static const int runFlag_SCALERS_ONLY_;

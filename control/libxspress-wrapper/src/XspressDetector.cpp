@@ -292,8 +292,13 @@ int XspressDetector::restoreSettings()
   }
 
   // Set up resgrades
+  bool list_mode = false;
+  if (xsp_mode_ == XSP_MODE_LIST){
+    list_mode = true;
+  }
+
   if (status == XSP_STATUS_OK){
-    status = detector_.setup_resgrades(xsp_use_resgrades_, xsp_max_channels_, xsp_num_aux_data_);
+    status = detector_.setup_format_run_mode(list_mode, xsp_use_resgrades_, xsp_max_channels_, xsp_num_aux_data_);
     if (status == XSP_STATUS_OK){
       LOG4CXX_DEBUG_LEVEL(1, logger_, "xsp_num_aux_data set to " << xsp_num_aux_data_);
       // If the DAQ object exists then setup the aux_data value
@@ -352,6 +357,14 @@ int XspressDetector::restoreSettings()
   // Re-apply trigger mode setting, since may have been overridden by restored config
   if (status == XSP_STATUS_OK){
     status = setTriggerMode();
+    if (status != XSP_STATUS_OK){
+      setErrorString(detector_.getErrorString());
+    }
+  }
+
+  // And finally trigger mux mode
+  if (status == XSP_STATUS_OK){
+    status = detector_.set_trigger_input(list_mode);
     if (status != XSP_STATUS_OK){
       setErrorString(detector_.getErrorString());
     }

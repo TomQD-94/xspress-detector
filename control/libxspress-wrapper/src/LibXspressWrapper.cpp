@@ -265,18 +265,20 @@ int LibXspressWrapper::restore_settings(const std::string& restore_path)
   return status;
 }
 
-int LibXspressWrapper::setup_resgrades(bool use_resgrades, int max_channels, int& num_aux_data)
+int LibXspressWrapper::setup_format_run_mode(bool list_mode, bool use_resgrades, int max_channels, int& num_aux_data)
 {
   int status = XSP_STATUS_OK;
   int xsp_status = 0;
-  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper setting up resgrades and calling xsp3_format_run");
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "Xspress wrapper setting up list mode, resgrades and calling xsp3_format_run");
   for (int chan = 0; chan < max_channels; chan++) {
     int aux_mode = 0;
+    num_aux_data = 1;
+    if (list_mode){
+      aux_mode |= XSP3_FORMAT_AUX1_MODE_TIMESTAMPED;
+    }
     if (use_resgrades){
       num_aux_data = N_RESGRADES;
-      aux_mode = XSP3_FORMAT_RES_MODE_MINDIV8;
-    } else {
-      num_aux_data = 1;
+      aux_mode |= XSP3_FORMAT_RES_MODE_MINDIV8;
     }
     xsp_status = xsp3_format_run(xsp_handle_, chan, aux_mode, 0, 0, 0, 0, 12);
     if (xsp_status < XSP3_OK) {
@@ -1166,6 +1168,32 @@ int LibXspressWrapper::set_sca_thresh(int chan, int value)
   xsp_status = xsp3_set_good_thres(xsp_handle_, chan, value);
   if (xsp_status != XSP3_OK) {
     checkErrorCode("xsp3_set_good_thres", xsp_status, true);
+    status = XSP_STATUS_ERROR;
+  }
+  return status;
+}
+
+int LibXspressWrapper::set_trigger_input(bool list_mode)
+{
+  int status = XSP_STATUS_OK;
+  int xsp_status;
+  Xsp3TriggerMux trig_mux;
+  memset(&trig_mux, 0, sizeof(Xsp3TriggerMux));
+
+  if (list_mode){
+    trig_mux.trig_sel[0] = 0;
+    trig_mux.trig_sel[1] = 2;
+    trig_mux.trig_sel[2] = 1;
+    trig_mux.trig_sel[3] = 0;
+  } else {
+    for (int i = 0; i < 4; i++){
+      trig_mux.trig_sel[i] = i;
+    }
+  }
+
+  xsp_status = xsp3_set_glob_trigger_select(xsp_handle_, 0, &trig_mux);
+  if (xsp_status != XSP3_OK) {
+    checkErrorCode("xsp3_set_glob_trigger_select", xsp_status, true);
     status = XSP_STATUS_ERROR;
   }
   return status;
