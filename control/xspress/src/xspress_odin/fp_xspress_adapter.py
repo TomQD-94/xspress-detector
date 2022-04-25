@@ -17,6 +17,13 @@ from tornado import escape
 from tornado.escape import json_encode, json_decode
 
 
+def bool_from_string(value):
+    bool_value = False
+    if value.lower() == 'true' or value.lower() == '1':
+        bool_value = True
+    return bool_value
+
+
 class FPXspressAdapter(FPCompressionAdapter):
     """
     FPXspressAdapter class
@@ -40,6 +47,29 @@ class FPXspressAdapter(FPCompressionAdapter):
         logging.debug("FPXspressAdapter init called")
         super(FPXspressAdapter, self).__init__(**kwargs)
 
+    @request_types('application/json', 'application/vnd.odin-native')
+    @response_types('application/json', default='application/json')
+    def put(self, path, request):  # pylint: disable=W0613
+        logging.error("IN HERE!")
+        if path == self._command:
+            write = bool_from_string(str(escape.url_unescape(request.body)))
+            if not write:
+                # Attempt initialisation of the connected clients
+                for client in self._clients:
+                    try:
+                        parameters = {
+                            'xspress-list': {
+                                'flush': True
+                            }
+                        }
+                        logging.error("Sending: {}".format(parameters))
+                        client.send_configuration(parameters)
+                    except Exception as err:
+                        logging.debug(OdinDataAdapter.ERROR_FAILED_TO_SEND)
+                        logging.error("Error: %s", err)
+        return super(FPXspressAdapter, self).put(path, request)
+
+
     def setup_rank(self):
         # Attempt initialisation of the connected clients
         for client in self._clients:
@@ -55,6 +85,9 @@ class FPXspressAdapter(FPCompressionAdapter):
                     'xspress': {
                         'frames': self._param['config/hdf/frames'],
                         'acq_id': self._param['config/hdf/acquisition_id']
+                    },
+                    'xspress-list': {
+                        'reset': True
                     }
                 }
                 logging.error("Sending: {}".format(parameters))
