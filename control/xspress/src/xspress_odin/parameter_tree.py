@@ -184,10 +184,28 @@ class XspressParameterTree:
         self.tree = tree
 
     def get(self, path):
-        return self._resolve_path(path).get()
+        result =  self._resolve_path(path)
+        return self._unroll(result)
+
+    def _unroll(self, tree: Union[dict, VirtualParameter]):
+        if isinstance(tree, VirtualParameter):
+            return tree.get()
+        else:
+            return {k: self._unroll(v) for k, v in tree.items()}
 
     def set(self, path, value):
-        return self._resolve_path(path).set(value)
+        result = self._resolve_path(path)
+        self._roll(result, value)
+
+    def _roll(self, tree, param_val):
+        if isinstance(tree, VirtualParameter) and not isinstance(param_val, dict):
+            tree.set(param_val)
+        elif isinstance(tree, dict) and isinstance(param_val, dict):
+            for k , v in param_val.items():
+                self._roll(tree[k], v)
+        else:
+            raise ValueError("input does is not correct type")
+        
 
     async def put(self, path, value):
         tokens = split_path(path)
@@ -203,7 +221,7 @@ class XspressParameterTree:
         else:
             return await parameter.put(*args)
 
-    def _resolve_path(self, path: str) -> Union[VirtualParameter, ListParameter]:
+    def _resolve_path(self, path: str) -> Union[VirtualParameter, ListParameter, dict]:
         tokens = split_path(path)
         if tokens[-1].isdigit(): # disregard index if parameter is a ListParameter
             tokens = tokens[:-1]

@@ -1,6 +1,6 @@
 import pytest
 
-from xspress_odin.parameter_tree import NotPuttableParameterException, NotSettableParameterException, VirtualParameter, GetSetVirtualParameter, GetVirtualParameter, PutVirtualParameter, \
+from xspress_odin.parameter_tree import NotPuttableParameterException, NotSettableParameterException, ParameterException, VirtualParameter, GetSetVirtualParameter, GetVirtualParameter, PutVirtualParameter, \
     ValueParameter, GetSetValueParameter, ListParameter, XspressParameterTree, bound_validator, is_pos
 
 class CalledException(Exception):
@@ -77,7 +77,8 @@ async def test_parameter_tree():
             "b": GetSetValueParameter(int, 3),
             "c": ListParameter(put_cb=dummy_async_callback),
             "d": {
-                "e": ValueParameter(str, "hello", put_cb=dummy_async_callback)
+                "e": ValueParameter(str, "hello", put_cb=dummy_async_callback),
+                "f": ListParameter(put_cb=dummy_async_callback),
             }
         }
     }
@@ -88,6 +89,13 @@ async def test_parameter_tree():
     assert 42 == await tree.put("a/c/0", 100)
     assert [100,2,3,4] == tree.get("a/c")
     assert "hello" == tree.get("a/d/e")
+    tree.set("a/d", {"e":"bye", "f":[1,2,3]})
+    assert "bye" == tree.get("a/d/e")
+    assert {"e":"bye", "f":[1,2,3]} == tree.get("a/d")
+    with pytest.raises(TypeError):
+        tree.set("a/d", {"e":1, "f":[1,2,3]})
+    with pytest.raises(TypeError):
+        tree.set("a/d", {"e":"33", "f":2})
 
 
 
