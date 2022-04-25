@@ -86,20 +86,25 @@ class XspressMetaWriter(MetaWriter):
         channel = header['channel_index']
         #self._logger.error("Channel index: {}".format(channel))
 
-        format_str = '{}i'.format(header['qty_scalars'])
+        format_str = '{}i'.format(header['qty_scalars']*header['number_of_frames'])
         array = struct.unpack(format_str, _data)
 
         # Number of channels 
         number_of_channels = header['number_of_channels']
+        # Number of frames
+        number_of_frames = header['number_of_frames']
         #self._logger.debug("Rank: {}  Index {}  Array_Size {}".format(rank, index, array_size))
         #self._logger.error(array)
-        for index in range(number_of_channels):
-            arr_index = index*XSPRESS_SCALARS_PER_CHANNEL
-            scalars = array[arr_index:arr_index+XSPRESS_SCALARS_PER_CHANNEL]
-            dataset_name = "{}{}".format(DATASET_SCALAR, channel+index)
-            #self._logger.error("Length before: {}".format(self._datasets[dataset_name]._h5py_dataset.len()))
-            self._add_value(dataset_name, scalars, offset=None)
-            #self._logger.error("Length after: {}".format(self._datasets[dataset_name]._h5py_dataset.len()))
+        for frame in range(number_of_frames):
+            frame_index = frame*number_of_channels*XSPRESS_SCALARS_PER_CHANNEL
+            frame_array = array[frame_index:frame_index+(number_of_channels*XSPRESS_SCALARS_PER_CHANNEL)]
+            for index in range(number_of_channels):
+                arr_index = index*XSPRESS_SCALARS_PER_CHANNEL
+                scalars = frame_array[arr_index:arr_index+XSPRESS_SCALARS_PER_CHANNEL]
+                dataset_name = "{}{}".format(DATASET_SCALAR, channel+index)
+                #self._logger.error("Length before: {}".format(self._datasets[dataset_name]._h5py_dataset.len()))
+                self._add_value(dataset_name, scalars, offset=None)
+                #self._logger.error("Length after: {}".format(self._datasets[dataset_name]._h5py_dataset.len()))
             
 #        if (datetime.now() - self._flush_time).total_seconds() > 1.0:
 #            self._flush_datasets()
@@ -113,13 +118,18 @@ class XspressMetaWriter(MetaWriter):
         channel = header['channel_index']
         # Extract Number of channels 
         number_of_channels = header['number_of_channels']
+        # Number of frames
+        number_of_frames = header['number_of_frames']
 
-        format_str = '{}d'.format(number_of_channels)
+        format_str = '{}d'.format(number_of_channels*number_of_frames)
         array = struct.unpack(format_str, _data)
 
-        for index in range(number_of_channels):
-            dataset_name = "{}{}".format(DATASET_DTC, channel+index)
-            self._add_value(dataset_name, array[index], offset=None)
+        for frame in range(number_of_frames):
+            frame_index = frame*number_of_channels
+            frame_array = array[frame_index:frame_index+number_of_channels]
+            for index in range(number_of_channels):
+                dataset_name = "{}{}".format(DATASET_DTC, channel+index)
+                self._add_value(dataset_name, frame_array[index], offset=None)
 
         #if (datetime.now() - self._flush_time).total_seconds() > 0.1:
         #    self._flush_datasets()
@@ -134,13 +144,18 @@ class XspressMetaWriter(MetaWriter):
         channel = header['channel_index']
         # Extract Number of channels 
         number_of_channels = header['number_of_channels']
+        # Number of frames
+        number_of_frames = header['number_of_frames']
 
-        format_str = '{}d'.format(number_of_channels)
+        format_str = '{}d'.format(number_of_channels*number_of_frames)
         array = struct.unpack(format_str, _data)
 
-        for index in range(number_of_channels):
-            dataset_name = "{}{}".format(DATASET_INP_EST, channel+index)
-            self._add_value(dataset_name, array[index], offset=None)
+        for frame in range(number_of_frames):
+            frame_index = frame*number_of_channels
+            frame_array = array[frame_index:frame_index+number_of_channels]
+            for index in range(number_of_channels):
+                dataset_name = "{}{}".format(DATASET_INP_EST, channel+index)
+                self._add_value(dataset_name, frame_array[index], offset=None)
 
     @staticmethod
     def get_version():
