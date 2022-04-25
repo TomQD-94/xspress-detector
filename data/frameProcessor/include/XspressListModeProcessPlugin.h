@@ -27,6 +27,7 @@ namespace FrameProcessor
     void reset_frame_count();
     boost::shared_ptr <Frame> add_block(uint32_t bytes, void *ptr);
     boost::shared_ptr <Frame> to_frame();
+    boost::shared_ptr <Frame> flush();
 
   private:
     void *ptr_;
@@ -63,6 +64,7 @@ namespace FrameProcessor
   private:
 
     void reset_acquisition();
+    void flush_close_acquisition();
     void set_channels(std::vector<uint32_t> channels);
     void set_frame_size(uint32_t num_bytes);
     void setup_memory_allocation();
@@ -81,6 +83,7 @@ namespace FrameProcessor
 
     static const std::string CONFIG_CHANNELS;
     static const std::string CONFIG_RESET_ACQUISITION;
+    static const std::string CONFIG_FLUSH_ACQUISITION;
     static const std::string CONFIG_FRAME_SIZE;
 
     /** Pointer to logger */

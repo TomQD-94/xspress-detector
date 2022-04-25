@@ -12,6 +12,7 @@ namespace FrameProcessor {
 
 const std::string XspressListModeProcessPlugin::CONFIG_CHANNELS =           "channels";
 const std::string XspressListModeProcessPlugin::CONFIG_RESET_ACQUISITION =  "reset";
+const std::string XspressListModeProcessPlugin::CONFIG_FLUSH_ACQUISITION =  "flush";
 const std::string XspressListModeProcessPlugin::CONFIG_FRAME_SIZE =         "frame_size";
 
 #define XSP3_10GTX_SOF 0x80000000
@@ -93,6 +94,7 @@ boost::shared_ptr <Frame> XspressListModeMemoryBlock::add_block(uint32_t bytes, 
   // Copy the number of words into the dataset
   memcpy(dest, &pkt_words, sizeof(uint64_t));
   dest += sizeof(uint64_t);
+  filled_size_ += sizeof(uint64_t);
 
   // Work out if adding the block will result in a full frame
   if (filled_size_ + bytes < num_bytes_){
@@ -103,7 +105,9 @@ boost::shared_ptr <Frame> XspressListModeMemoryBlock::add_block(uint32_t bytes, 
     // Fill up the remainder of the block, create the frame and then copy over 
     // any remaining bytes
     uint32_t bytes_to_full = num_bytes_ - filled_size_;
-    memcpy(dest, ptr, bytes_to_full);
+    if (bytes_to_full > 0){
+      memcpy(dest, ptr, bytes_to_full);
+    }
 
     frame = this->to_frame();
 
@@ -145,6 +149,19 @@ boost::shared_ptr <Frame> XspressListModeMemoryBlock::to_frame()
   return frame;
 }
 
+boost::shared_ptr <Frame> XspressListModeMemoryBlock::flush()
+{
+  boost::shared_ptr <Frame> frame;
+
+  // Create the frame around the current (partial) block
+  dimensions_t dims;
+  FrameMetaData list_metadata(frame_count_, name_, raw_64bit, "", dims);
+  frame = boost::shared_ptr<Frame>(new DataBlockFrame(list_metadata, filled_size_));
+  memcpy(frame->get_data_ptr(), ptr_, filled_size_);
+
+  return frame;
+}
+
 XspressListModeProcessPlugin::XspressListModeProcessPlugin() :
   num_channels_(0)
 {
@@ -181,6 +198,10 @@ void XspressListModeProcessPlugin::configure(OdinData::IpcMessage& config, OdinD
 
   if (config.has_param(XspressListModeProcessPlugin::CONFIG_RESET_ACQUISITION)){
     this->reset_acquisition();
+  }
+
+  if (config.has_param(XspressListModeProcessPlugin::CONFIG_FLUSH_ACQUISITION)){
+    this->flush_close_acquisition();
   }
 
   if (config.has_param(XspressListModeProcessPlugin::CONFIG_FRAME_SIZE)){
@@ -229,7 +250,22 @@ void XspressListModeProcessPlugin::reset_acquisition()
   std::map<uint32_t, boost::shared_ptr<XspressListModeMemoryBlock> >::iterator iter;
   for (iter = memory_ptrs_.begin(); iter != memory_ptrs_.end(); ++iter){
     iter->second->reset_frame_count();
+    iter->second->reset();
   }
+}
+
+void XspressListModeProcessPlugin::flush_close_acquisition()
+{
+  LOG4CXX_INFO(logger_, "Flushing and closing acquisition");
+  std::map<uint32_t, boost::shared_ptr<XspressListModeMemoryBlock> >::iterator iter;
+  for (iter = memory_ptrs_.begin(); iter != memory_ptrs_.end(); ++iter){
+    LOG4CXX_DEBUG_LEVEL(0, logger_, "Flushing frame for channel " << iter->first);
+    boost::shared_ptr <Frame> list_frame = iter->second->to_frame();
+    if (list_frame){
+      this->push(list_frame);
+    }
+  }
+  this->notify_end_of_acquisition();
 }
 
 void XspressListModeProcessPlugin::set_frame_size(uint32_t num_bytes)
@@ -316,16 +352,24 @@ void XspressListModeProcessPlugin::process_frame(boost::shared_ptr <Frame> frame
     packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0]));
     packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0]));
 
-    if ((XSP3_HGT64_MASK_END_OF_FRAME&peek_ptr[0]) == XSP3_HGT64_MASK_END_OF_FRAME){
-      LOG4CXX_DEBUG_LEVEL(0, logger_, " Ch: " << channel << " EOF marker registered"); 
-    }
     // Place the bytes into the store
     boost::shared_ptr <Frame> list_frame = (memory_ptrs_[channel])->add_block(pkt_size, data_ptr);
 
     if (list_frame){
-      LOG4CXX_INFO(logger_, "Completed frame for channel " << channel << ", pushing");
+      LOG4CXX_DEBUG_LEVEL(0, logger_, "Completed frame for channel " << channel << ", pushing");
       // There is a full frame available for pushing
       this->push(list_frame);
+    }
+
+    if ((XSP3_HGT64_MASK_END_OF_FRAME&peek_ptr[0]) == XSP3_HGT64_MASK_END_OF_FRAME){
+      LOG4CXX_DEBUG_LEVEL(0, logger_, " Ch: " << channel << " EOF marker registered"); 
+      // Place the bytes into the store
+//      boost::shared_ptr <Frame> eof_frame = (memory_ptrs_[channel])->flush();
+//      if (eof_frame){
+//        LOG4CXX_DEBUG_LEVEL(0, logger_, "EOF frame for channel " << channel << ", pushing");
+//        // There is a EOF frame available for pushing
+//        this->push(eof_frame);
+//      }
     }
 
   } else {
