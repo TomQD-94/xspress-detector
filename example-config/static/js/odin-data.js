@@ -71,9 +71,12 @@ $( document ).ready(function()
     update_frames();
   });
 
-  $('#set-hw-mode').change(function(){
-    update_mode();
-  });
+  $('#set-hw-trigger-mode').on( "change", () => {
+    console.log("trgger changed!!!");
+    console.log("trgger changed!!!");
+    console.log("trgger changed!!!");
+    update_trigger_mode();
+  } );
 
   $('#detector-arm-cmd').click(function(){
     ctrl_command('arm');
@@ -155,10 +158,23 @@ function update_frames() {
     $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/xsp/frames/' + set_value, process_cmd_response);
 }
 
-function update_mode() {
-    set_value = $('#set-hw-mode').find(":selected").text();
-    $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/xsp/mode/' + set_value, process_cmd_response);
-    fp_mode_command(set_value);
+function update_trigger_mode() {
+    const name = 'trigger_mode';
+    const set_value = $('#set-hw-trigger-mode').find(":selected").val();
+    // const value = TRIGGER_MODE[set_value];
+    const data = JSON.stringify({trigger_mode : set_value})
+    $.ajax(
+      {
+        url: '/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/xsp/trigger_mode',
+        type: 'PUT',
+        success: () => {alert("sent trigger")},
+        contentType: "application/json",
+        data: data,
+      }
+    );
+
+    // $.put('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/xsp/trigger_mode', {name : value}, process_cmd_response);
+    // fp_mode_command(set_value);
 }
 
 function ctrl_command(command) {
@@ -352,30 +368,38 @@ function update_api_adapters() {
         //update_adapter_objects();
     });
 }
-
 const TRIGGER_MODE = {
-  0 : "SOFTWARE",
-  1 : "TTL_RISING_EDGE",
-  2 : "BURST",
-  3 : "TTL_VETO_ONLY",
-  4 : "SOFTWARE_START_STOP",
-  5 : "IDC",
-  6 : "TTL_BOTH",
-  7 : "LVDS_VETO_ONLY",
-  8 : "LVDS_BOTH",
-}
+  0: "software",
+  1: "ttl_rising_edge",
+  2: "burst",
+  3: "ttl_veto_only",
+  4: "software_start_stop",
+  5: "idc",
+  6: "ttl_both",
+  7: "lvds_veto_only",
+  8: "lvds_both",
+  software: 0,
+  ttl_rising_edge: 1,
+  burst: 2,
+  ttl_veto_only: 3,
+  software_start_stop: 4,
+  idc: 5,
+  ttl_both: 6,
+  lvds_veto_only: 7,
+  lvds_both: 8,
+};
 
 function update_detector_status() {
     $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name, function(response) {
         console.log(response);
-        $('#detector-hw-username').html(response.username);
-        $('#detector-hw-start-time').html(response.start_time);
-        $('#detector-hw-up-time').html(response.up_time);
+        $('#detector-hw-username').html(response.adapter.username);
+        $('#detector-hw-start-time').html(response.adapter.start_time);
+        $('#detector-hw-up-time').html(response.adapter.up_time);
         $('#detector-hw-endpoint').html(response.ctrl_endpoint);
         $('#detector-hw-connected').html(led_html(''+response['connected'], 'green', 26));
         $('#detector-hw-exposure').html(response.xsp.exposure_time);
         $('#detector-hw-frames').html(response.xsp.frames);
-        $('#detector-hw-trigger-mode').html(TRIGGER_MODE[response.xsp.trigger_mode]);
+        $('#detector-hw-trigger-mode').html(response.xsp.trigger_mode);
     });
 
     $.getJSON('/api/' + odin_data.api_version + '/' + odin_data.ctrl_name + '/config/frames_per_trigger', function(response) {
