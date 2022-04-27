@@ -319,211 +319,49 @@ void XspressListModeProcessPlugin::process_frame(boost::shared_ptr <Frame> frame
   char* frame_bytes = static_cast<char *>(frame->get_data_ptr());	
   Xspress::ListFrameHeader *header = reinterpret_cast<Xspress::ListFrameHeader *>(frame_bytes);
 
-  char *data_ptr = frame_bytes;
-  data_ptr += sizeof(Xspress::ListFrameHeader);
+  LOG4CXX_DEBUG_LEVEL(2, logger_, "Received frame with " << header->packets_received << " packets");
 
-  // Obtain the packet size and the channel number
-  uint32_t pkt_size = header->packet_size;
-  uint32_t channel = header->channel;
+  for (int packet_index = 0; packet_index < header->packets_received; packet_index++){
 
-  LOG4CXX_DEBUG_LEVEL(3, logger_, "Received " << pkt_size << " bytes from channel " << channel);
+    char *data_ptr = frame_bytes + sizeof(Xspress::ListFrameHeader) + (packet_index * Xspress::xspress_packet_size);
 
-  // Peek at incoming words
-  uint64_t *peek_ptr = (uint64_t *)data_ptr;
+    // Obtain the packet size and the channel number
+    uint32_t pkt_size = header->packet_headers[packet_index].packet_size;
+    uint32_t channel = header->packet_headers[packet_index].channel;
 
-  LOG4CXX_DEBUG_LEVEL(3, logger_, " Ch: " << channel
-  << " FRAME: " << std::dec << XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0])
-  << " PREV_TIME: " << std::dec << XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0])
-  << " CHAN: " << std::dec << XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0]));
+    LOG4CXX_DEBUG_LEVEL(3, logger_, "Received " << pkt_size << " bytes from channel " << channel);
 
-//  if (pkt_size < 100){
-//    LOG4CXX_DEBUG_LEVEL(0, logger_, "Received " << pkt_size << " bytes from channel " << channel);
-//    LOG4CXX_DEBUG_LEVEL(0, logger_, " Ch: " << channel
-//      << " FRAME: " << std::dec << XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0])
-//      << " PREV_TIME: " << std::dec << XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0])
-//      << " CHAN: " << std::dec << XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0])
-//      << " RAW: " << std::hex << peek_ptr[0]
-//      << " EOF: " << std::hex << (XSP3_HGT64_MASK_END_OF_FRAME&peek_ptr[0]));
-//  }
+    // Peek at incoming words
+    uint64_t *peek_ptr = (uint64_t *)data_ptr;
 
-  if (packet_headers_.count(channel) > 0){
-    packet_headers_[channel].clear();
-    packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0]));
-    packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0]));
-    packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0]));
+    LOG4CXX_DEBUG_LEVEL(3, logger_, " Ch: " << channel
+    << " FRAME: " << std::dec << XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0])
+    << " PREV_TIME: " << std::dec << XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0])
+    << " CHAN: " << std::dec << XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0]));
 
-    // Place the bytes into the store
-    boost::shared_ptr <Frame> list_frame = (memory_ptrs_[channel])->add_block(pkt_size, data_ptr);
+    if (packet_headers_.count(channel) > 0){
+      packet_headers_[channel].clear();
+      packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_FRAME(peek_ptr[0]));
+      packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_PREV_TIME(peek_ptr[0]));
+      packet_headers_[channel].push_back(XSP3_HGT64_SOF_GET_CHAN(peek_ptr[0]));
 
-    if (list_frame){
-      LOG4CXX_DEBUG_LEVEL(0, logger_, "Completed frame for channel " << channel << ", pushing");
-      // There is a full frame available for pushing
-      this->push(list_frame);
-    }
-
-    if ((XSP3_HGT64_MASK_END_OF_FRAME&peek_ptr[0]) == XSP3_HGT64_MASK_END_OF_FRAME){
-      LOG4CXX_DEBUG_LEVEL(0, logger_, " Ch: " << channel << " EOF marker registered"); 
       // Place the bytes into the store
-//      boost::shared_ptr <Frame> eof_frame = (memory_ptrs_[channel])->flush();
-//      if (eof_frame){
-//        LOG4CXX_DEBUG_LEVEL(0, logger_, "EOF frame for channel " << channel << ", pushing");
-//        // There is a EOF frame available for pushing
-//        this->push(eof_frame);
-//      }
-    }
+      boost::shared_ptr <Frame> list_frame = (memory_ptrs_[channel])->add_block(pkt_size, data_ptr);
 
-  } else {
-    LOG4CXX_ERROR(logger_, "Bad channel, this plugin is not set up for channel " << channel);
-  }
-/*
-  // Check the frame number
-  uint32_t frame_id = header->frame_number;
-
-  if (frame_id == 0){
-    LOG4CXX_INFO(logger_, "First frame received");
-    LOG4CXX_INFO(logger_, "  First channel index: " << header->first_channel);
-    LOG4CXX_INFO(logger_, "  Number of channels: " << header->num_channels);
-    LOG4CXX_INFO(logger_, "  Number of scalars: " << header->num_scalars);
-    LOG4CXX_INFO(logger_, "  Number of resgrades: " << header->num_aux);
-  }
-
-  // Check the number of channels.  If the number of channels is different
-  // to our previously stored number we must reallocate the memory block
-  if (header->num_channels != num_channels_){
-    set_number_of_channels(header->num_channels);
-  }
-  
-  // If the frame number is greater than the current memory allocation clear out the memory
-  // and update the starting block
-
-  // Split out the frame data into channels and update the memory blocks.
-  // If any memory blocks are full then create the frame object and push (this should happen
-  // to all of the memory blocks at once).
-  uint32_t mca_size = header->num_energy_bins * header->num_aux * sizeof(uint32_t);
-  uint32_t num_scalar_values = header->num_scalars * header->num_channels;
-  uint32_t num_dtc_factors = header->num_channels;
-  uint32_t num_inp_est = header->num_channels;
-  uint32_t first_channel_index = header->first_channel;
-
-  char *raw_sca_ptr = frame_bytes;
-  raw_sca_ptr += sizeof(ListFrameHeader); 
-  uint32_t *sca_ptr = (uint32_t *)raw_sca_ptr;
-//  for (int cindex = 0; cindex < num_channels_; cindex++){
-//    LOG4CXX_INFO(logger_, "Scalers " << sca_ptr[0] <<
-//                          " " << sca_ptr[1] <<
-//                          " " << sca_ptr[2] <<
-//                          " " << sca_ptr[3] <<
-//                          " " << sca_ptr[4] <<
-//                          " " << sca_ptr[5] <<
-//                          " " << sca_ptr[6] <<
-//                          " " << sca_ptr[7] <<
-//                          " " << sca_ptr[8]);
-//    sca_ptr += 9;
-//  }
-
-
-  char *mca_ptr = frame_bytes;
-  mca_ptr += (sizeof(ListFrameHeader) + 
-             (num_scalar_values*sizeof(uint32_t)) + 
-             (num_dtc_factors*sizeof(double)) + 
-             (num_inp_est*sizeof(double))
-             );
-
-  for (int index = 0; index < num_channels_; index++){
-    memory_ptrs_[index]->add_frame(frame_id, mca_ptr);
-    mca_ptr += mca_size;
-
-    // Check if the buffer is full
-    if (memory_ptrs_[index]->check_full()){
-//        LOG4CXX_INFO(logger_, "Memory block full");
-
-        // Create the frame and push it
-        dimensions_t mca_dims;
-//        mca_dims.push_back(frames_per_block_);
-//        mca_dims.push_back(header->num_aux);
-        mca_dims.push_back(header->num_energy_bins);
-        std::stringstream ss;
-        ss << "mca_" << index + first_channel_index;
-        FrameMetaData mca_metadata((frame_id / frames_per_block_), ss.str(), raw_32bit, "", mca_dims);
-        boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->size()));
-        memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->size());
-        // Set the chunking size
-        mca_frame->set_outer_chunk_size(frames_per_block_);
-        // Push out the MCA data
-        this->push(mca_frame);
-        // Reset the memory block
-        memory_ptrs_[index]->reset();
-    } else {
-      // Check if we are writing out the last block which is not full size
-      if (frame_id == (num_frames_-1)){
-        LOG4CXX_INFO(logger_, "num_frames_ - 1: " << (num_frames_-1));
-        dimensions_t mca_dims;
-        mca_dims.push_back(header->num_energy_bins);
-        std::stringstream ss;
-        ss << "mca_" << index + first_channel_index;
-        FrameMetaData mca_metadata((frame_id / frames_per_block_), ss.str(), raw_32bit, "", mca_dims);
-        boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->current_byte_size()));
-        memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->current_byte_size());
-        // Set the chunking size
-        mca_frame->set_outer_chunk_size((int)memory_ptrs_[index]->frames());
-        // Push out the MCA data
-        this->push(mca_frame);
-        // Reset the memory block
-        memory_ptrs_[index]->reset();
-        LOG4CXX_INFO(logger_, "Pushed partially full frame as required frame count reached");
+      if (list_frame){
+        LOG4CXX_DEBUG_LEVEL(1, logger_, "Completed frame for channel " << channel << ", pushing");
+        // There is a full frame available for pushing
+        this->push(list_frame);
       }
+
+      if ((XSP3_HGT64_MASK_END_OF_FRAME&peek_ptr[0]) == XSP3_HGT64_MASK_END_OF_FRAME){
+        LOG4CXX_DEBUG_LEVEL(1, logger_, " Ch: " << channel << " EOF marker registered");
+      }
+
+    } else {
+      LOG4CXX_ERROR(logger_, "Bad channel, this plugin is not set up for channel " << channel);
     }
   }
-  */
 }
-
-/*
-        size_t mcaDataSize = header_->numEnergy * header_->numAux * header_->numChannels * sizeof(uint32_t);
-        uint32_t *iSCA = reinterpret_cast<uint32_t *>(frameBytes + sizeof(FrameHeader) + mcaDataSize);
-
-        double clockPeriod = header_->clockPeriod;
-        double deadtimeEnergy = header_->deadtimeEnergy;
-
-        dimensions_t mca_dims;
-        // set things from data frame
-        mca_dims.push_back(header_->numChannels);
-        mca_dims.push_back(header_->numAux);
-        mca_dims.push_back(header_->numEnergy);
-        frame->meta_data().set_dimensions(mca_dims);
-        frame->meta_data().set_data_type(XSPRESS_DATA_TYPE);
-        frame->meta_data().set_dataset_name("mca");
-        frame->set_image_offset(sizeof(FrameHeader));
-        frame->set_image_size(mcaDataSize);
-        frame->set_frame_number(header_->frameNumber);
-        
-        frame->meta_data().set_acquisition_ID("");
-
-        FrameProcessor::DataType scaDataType = this->dtcEnabled ? raw_64bit : XSPRESS_DATA_TYPE;
-
-        dimensions_t scaler_dims;
-        scaler_dims.push_back(header_->numChannels);
-        scaler_dims.push_back(XSP3_SW_NUM_SCALERS);
-        FrameMetaData scaler_metadata(header_->frameNumber, "sca", scaDataType, "", scaler_dims);
-        // TODO: FIX, how can we allocate or request new blocks?	
-        size_t scalerSize = XSP3_SW_NUM_SCALERS*header_->numChannels * (this->dtcEnabled ? sizeof(double) : sizeof(uint32_t));
-        boost::shared_ptr <Frame> scaler_frame(new DataBlockFrame(scaler_metadata, scalerSize));
-
-        if (this->dtcEnabled)
-        {
-            auto dtcFactors = new double[header_->numChannels];
-            auto corrected = new double[header_->numChannels];
-            calculateDeadtimeCorrection(header_->numChannels, clockPeriod, deadtimeEnergy, iSCA, dtcFactors, corrected);
-            deadtimeCorrectScalers(header_->numChannels, iSCA, static_cast<double *>(scaler_frame->get_data_ptr()), dtcFactors, corrected, clockPeriod);
-        }
-        else
-        {
-            memcpy(scaler_frame->get_data_ptr(), iSCA, scalerSize);
-        }
-        this->push(frame);
-        this->push(scaler_frame);
-        LOG4CXX_TRACE(logger_, "Got frame number: " << header_->frameNumber);
-    }
-*/
-
 
 }

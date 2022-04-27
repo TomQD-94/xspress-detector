@@ -33,17 +33,24 @@ enum XspressState {
 #define XSP_10GTX_PACKET_MASK    0x0FFFFFFF
 #define XSP_10GTX_TIMEOUT        30
 
+#define XSP_PACKETS_PER_FRAME    20
 
 namespace Xspress
 {
   static const size_t xspress_packet_size        = XSPRESS_RX_BUFF_LWORDS * sizeof(u_int64_t);
-  static const size_t frame_payload_size         = xspress_packet_size;
+  static const size_t frame_payload_size         = XSP_PACKETS_PER_FRAME * xspress_packet_size;
   static const size_t packet_header_size         = XSPRESS_RX_HEADER_LWORDS * sizeof(u_int64_t);
 
   typedef struct
   {
     uint32_t packet_size;
     uint64_t channel;
+  } ListPacketHeader;
+
+  typedef struct
+  {
+    uint32_t packets_received;
+    ListPacketHeader packet_headers[XSP_PACKETS_PER_FRAME];
   } ListFrameHeader;
 
 

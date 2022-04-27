@@ -65,6 +65,7 @@ class XspressListModeFrameDecoder : public FrameDecoderUDP {
     boost::shared_ptr<void> dropped_frame_buffer_;
     void *current_frame_buffer_;
     Xspress::ListFrameHeader *current_frame_header_;
+    Xspress::ListPacketHeader *current_packet_header_;
     //void *dropped_frame_buffer_;
     int32_t current_frame_buffer_id_;
     uint32_t current_frame_number_;

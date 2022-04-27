@@ -84,33 +84,37 @@ namespace FrameReceiver {
 
     void XspressListModeFrameDecoder::process_packet_header(size_t bytes_received, int port, struct sockaddr_in* from_addr)
     {
-      if (empty_buffer_queue_.empty()){
-        current_frame_buffer_ = dropped_frame_buffer_.get();
-        if (!dropping_frame_data_){
-          uint64_t *lptr = (uint64_t *)get_packet_header_buffer();
-          LOG4CXX_ERROR(logger_, "Time Frame: " << XSP_SOF_GET_FRAME(*lptr) << " received but no free buffers available. Dropping packet");
-          dropping_frame_data_ = true;
-        }
-      } else {
-        current_frame_buffer_id_ = empty_buffer_queue_.front();
-        empty_buffer_queue_.pop();
-        current_frame_buffer_ = buffer_manager_->get_buffer_address(current_frame_buffer_id_);
+      if (current_frame_buffer_id_ == -1){
+        if (empty_buffer_queue_.empty()){
+          current_frame_buffer_ = dropped_frame_buffer_.get();
+          if (!dropping_frame_data_){
+            uint64_t *lptr = (uint64_t *)get_packet_header_buffer();
+            LOG4CXX_ERROR(logger_, "Time Frame: " << XSP_SOF_GET_FRAME(*lptr) << " received but no free buffers available. Dropping packet");
+            dropping_frame_data_ = true;
+          }
+        } else {
+          current_frame_buffer_id_ = empty_buffer_queue_.front();
+          empty_buffer_queue_.pop();
+          current_frame_buffer_ = buffer_manager_->get_buffer_address(current_frame_buffer_id_);
 
-        if (dropping_frame_data_){
-          dropping_frame_data_ = false;
-          LOG4CXX_DEBUG_LEVEL(2, logger_, "Free buffers are now available, allocating frame buffer ID " << current_frame_buffer_id_);
+          if (dropping_frame_data_){
+            dropping_frame_data_ = false;
+            LOG4CXX_DEBUG_LEVEL(2, logger_, "Free buffers are now available, allocating frame buffer ID " << current_frame_buffer_id_);
+          }
         }
+        // Initialise frame header
+        current_frame_header_ = reinterpret_cast<Xspress::ListFrameHeader*>(current_frame_buffer_);
+        current_frame_header_->packets_received = 0;
       }
-
-      current_frame_header_ = reinterpret_cast<Xspress::ListFrameHeader*>(current_frame_buffer_);
     }
 
     void* XspressListModeFrameDecoder::get_next_payload_buffer(void) const
     {
       uint8_t* next_receive_location =
         reinterpret_cast<uint8_t*>(current_frame_buffer_)
-		+ get_frame_header_size()
-		+ get_packet_header_size();
+        + get_frame_header_size()
+        + (get_next_payload_size() * current_frame_header_->packets_received)
+        + get_packet_header_size();
 
       return reinterpret_cast<void*>(next_receive_location);
     }
@@ -122,14 +126,23 @@ namespace FrameReceiver {
 
     FrameDecoder::FrameReceiveState XspressListModeFrameDecoder::process_packet(size_t bytes_received, int port, struct sockaddr_in* from_addr)
     {
+      FrameDecoder::FrameReceiveState frame_state = FrameDecoder::FrameReceiveStateIncomplete;
+      bool end_of_frame = false;
       uint64_t *lptr = (uint64_t *)get_packet_header_buffer();
       uint64_t chan_of_card = XSP_SOF_GET_CHAN(*lptr);
       char *ip = inet_ntoa(from_addr->sin_addr);
       std::string str_ip(ip);
       uint64_t channel = channel_map_[str_ip] + chan_of_card;
 
+      // We need to copy the 2 word packet header into the frame at the correct location
+      uint8_t* packet_header_location = reinterpret_cast<uint8_t*>(current_frame_buffer_)
+                                  			+ get_frame_header_size()
+			                                  + (get_next_payload_size() * current_frame_header_->packets_received);
+      memcpy(packet_header_location, get_packet_header_buffer(), get_packet_header_size());
+
       if (*lptr & XSP_MASK_END_OF_FRAME){
         // Acknowledge packet to send if get a end of frame marker.
+        end_of_frame = true;
         uint32_t tbuff[XSPRESS_ACK_SIZE];
         tbuff[0] = 0;
         tbuff[1] = XSP_10GTX_SOF | XSP_10GTX_EOF; // Single packet frame
@@ -156,25 +169,27 @@ namespace FrameReceiver {
       }
 
       // Set the size of the packet in the frame header
-      current_frame_header_->packet_size = bytes_received;
+      current_frame_header_->packet_headers[current_frame_header_->packets_received].packet_size = bytes_received;
       // Set the channel number in the frame header
-      current_frame_header_->channel = channel;
+      current_frame_header_->packet_headers[current_frame_header_->packets_received].channel = channel;
 
-      // We need to copy the single word packet header into the frame at the correct location
-      uint8_t* packet_header_location =
-                reinterpret_cast<uint8_t*>(current_frame_buffer_) +
-                get_frame_header_size();
-      memcpy(packet_header_location, get_packet_header_buffer(), get_packet_header_size());
+      // Increment the number of packets received for this frame
+      if (!dropping_frame_data_) {
+        current_frame_header_->packets_received++;
+        LOG4CXX_DEBUG_LEVEL(2, logger_, "  Packet count: " << current_frame_header_->packets_received);
+      }
 
       // Check we are not dropping data for this frame
       if (!dropping_frame_data_){
-  			// Notify main thread that frame is ready
-	  		ready_callback_(current_frame_buffer_id_, current_frame_number_);
-        current_frame_number_++;
+        if (current_frame_header_->packets_received == XSP_PACKETS_PER_FRAME || end_of_frame){
+          // Notify main thread that frame is ready
+          ready_callback_(current_frame_buffer_id_, current_frame_number_);
+          current_frame_number_++;
+          current_frame_buffer_id_ = -1;
+          // Set frame state accordingly
+          frame_state = FrameDecoder::FrameReceiveStateComplete;
+        }
       }
-
-      // Set frame state accordingly
-	    FrameDecoder::FrameReceiveState frame_state = FrameDecoder::FrameReceiveStateComplete;
       return frame_state;
     }
 
