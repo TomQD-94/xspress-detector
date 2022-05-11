@@ -43,6 +43,10 @@ class XspressMetaWriter(MetaWriter):
     def __init__(self, name, directory, endpoints, config):
         # This must be defined for _define_detector_datasets in base class __init__
         self._sensor_shape = config.sensor_shape
+        print("initialising XspressMetaWriter")
+        if config.int_args is None:
+            raise RuntimeError("Attribute int_args in MetaWriterConfig needs to be supplied. config.int1 == max_channels")
+        self._num_channels, *rest = config.int_args
 
         super(XspressMetaWriter, self).__init__(name, directory, endpoints, config)
 #        self._detector_finished = False  # Require base class to check we have finished
@@ -53,12 +57,12 @@ class XspressMetaWriter(MetaWriter):
     def _define_detector_datasets(self):
         dsets = []
         self._logger.error("IN HERE")
-        for index in range(36):
+        for index in range(self._num_channels):
             scalar_name = "{}{}".format(DATASET_SCALAR, index)
             dtc_name = "{}{}".format(DATASET_DTC, index)
             inp_est_name = "{}{}".format(DATASET_INP_EST, index)
             self._logger.error("Adding dataset: {}".format(scalar_name))
-            dsets.append(Int32HDF5Dataset(scalar_name, shape=(0, 9), maxshape=(None, 9), rank=2, cache=True, block_size=2000))
+            dsets.append(Int32HDF5Dataset(scalar_name, shape=(0, XSPRESS_SCALARS_PER_CHANNEL), maxshape=(None, XSPRESS_SCALARS_PER_CHANNEL), rank=2, cache=True, block_size=2000))
             self._logger.error("Adding dataset: {}".format(dtc_name))
             #dsets.append(Float64HDF5Dataset(dtc_name))
             dsets.append(Float64HDF5Dataset(dtc_name, shape=(0,), maxshape=(None,), rank=1, cache=True, block_size=2000))
