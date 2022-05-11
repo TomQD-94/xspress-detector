@@ -4,13 +4,9 @@ import numpy as np
 import json
 import argparse
 from datetime import datetime
+import logging
 
 
-ports = [15500, 15501, 15502,
-         15503, 15504, 15505,
-         15506, 15507, 15508]
-
-port = 15510
 
 
 class LiveViewCombiner(object):
@@ -34,7 +30,7 @@ class LiveViewCombiner(object):
 
     def new_frame(self):
         frame = {}
-        for port in ports:
+        for port in self._subscribers.values():
             frame[port] = None
         return frame
 
@@ -53,10 +49,6 @@ class LiveViewCombiner(object):
                     header = json.loads(message[0].decode('utf-8'))
                     data = message[1]
 
-                    if header['frame_num'] != current_index:
-                        current_frame = self.new_frame()
-                        current_index = header['frame_num']
-
                     current_frame[self._subscribers[socket]] = data
                     publish = True
                     for port in current_frame:
@@ -64,7 +56,7 @@ class LiveViewCombiner(object):
                             publish = False
                     
                     if publish:
-                        header['shape'] = [str(int(header['shape'][0])*int(header['shape'][1])*len(ports)), header['shape'][2]]
+                        header['shape'] = [str(int(header['shape'][0])*int(header['shape'][1])*len(self._subscribers)), header['shape'][2]]
                         new_data = None
                         for index in current_frame:
                             if new_data is None:
@@ -87,12 +79,14 @@ def options():
 
 
 def main():
+    print("entering main")
     args = options()
 
     sub_ports = [int(p.strip()) for p in args.sub_ports.split(",")]
     pub_port = int(args.pub_port)
 
     combiner = LiveViewCombiner(pub_port, sub_ports)
+    logging.info("Initialised the LiveViewCombiner object")
     combiner.listen()
 
 
