@@ -16,17 +16,6 @@ from odin_data.ipc_message import IpcMessage
 from .debug import debug_method
 
 
-def require_valid_detector(func):
-    """Decorator method for request handler methods to check that adapter has valid detector."""
-    def wrapper(_self, path, request):
-        if _self.detector is None:
-            return ApiAdapterResponse(
-                'Invalid detector configuration', status_code=500
-            )
-        return func(_self, path, request)
-    return wrapper
-
-
 class XspressAdapter(AsyncApiAdapter):
     """XspressAdapter class.
 
@@ -75,15 +64,13 @@ class XspressAdapter(AsyncApiAdapter):
                 daq_endpoints=daq_endpoints,
             )
             logging.debug('done configuring detector')
-        except XspressDetectorException as e:
-            logging.error('XspressAdapter failed to initialise detector: %s', e)
         except Exception as e:
             logging.error('Unhandled Exception:\n %s', traceback.format_exc())
+            exit(1) # as there's no way to recover from this
         logging.info('exiting XspressAdapter.__init__')
 
     @request_types('application/json')
     @response_types('application/json', default='application/json')
-    @require_valid_detector
     async def get(self, path, request):
         """Handle an HTTP GET request.
 
@@ -111,7 +98,6 @@ class XspressAdapter(AsyncApiAdapter):
 
     @request_types('application/json')
     @response_types('application/json', default='application/json')
-    @require_valid_detector
     async def put(self, path, request):
         """Handle an HTTP PUT request.
 
@@ -148,8 +134,14 @@ class XspressAdapter(AsyncApiAdapter):
 
         return ApiAdapterResponse(response, status_code=status_code)
 
-    def initialize(self, adapters):
-        fr_adapter = adapters["fr"]
-        fp_adapter = adapters["fp"]
-        self.detector.set_fr_handler(fr_adapter)
-        self.detector.set_fp_handler(fp_adapter)
+    # def initialize(self, adapters):
+    #     '''
+    #     Not used.
+    #     At the moment the XspressDetector is managing the fp/fr processes by connecting to them directly
+    #     in the future when the fp_xspress_adapter is extended to support switching modes we might use
+    #     this method to get a handle to the fp/fr adapters.
+    #     '''
+    #     fr_adapter = adapters["fr"]
+    #     fp_adapter = adapters["fp"]
+    #     self.detector.set_fr_handler(fr_adapter)
+    #     self.detector.set_fp_handler(fp_adapter)
