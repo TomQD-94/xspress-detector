@@ -18,5 +18,30 @@
     "[html]": {
         "editor.defaultFormatter": "vscode.html-language-features"
     },
-    "prettier.enableDebugLogs": true
+    "prettier.enableDebugLogs": true,
+    "editor.tokenColorCustomizations": {
+        "[Solarized Light]": {
+            "textMateRules": [
+                {
+                    "name": "python class",
+                    "scope": [
+                        "entity.name.type",
+                        "entity.name.namespace",
+                        "entity.name.scope-resolution"
+                    ],
+                    "settings": {
+                        "foreground": "#2998b7"
+                    }
+                },
+                {
+                    "name": "python function",
+                    "scope": ["entity.name.function"],
+                    "settings":{
+                        "foreground": "#268bd2",
+                        "fontStyle": "italic"
+                    }
+                }
+            ]
+        }
+    }
 }
