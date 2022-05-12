@@ -11,6 +11,8 @@
 #include "XspressDetector.h"
 #include "DebugLevelLogger.h"
 
+#define SHM_FILE_PATH "/dev/shm/xsp3_scalers0"
+
 namespace Xspress
 {
 /** Construct a new XspressDetector class.
@@ -173,6 +175,9 @@ bool XspressDetector::checkConnected()
 int XspressDetector::disconnect()
 {
   int status = XSP_STATUS_OK;
+  if (unlink(SHM_FILE_PATH) < 0){
+    LOG4CXX_ERROR(logger_, "Could not unlink the shared memory file " << SHM_FILE_PATH);
+  }
 
   if (checkConnected()){
     status = detector_.close_connection();
