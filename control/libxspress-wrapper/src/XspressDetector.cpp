@@ -27,6 +27,7 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_num_tf_(0),
     xsp_base_IP_(""),
     xsp_max_channels_(0),
+    xsp_mca_channels_(0),
     xsp_max_spectra_(0),
     xsp_debug_(0),
     xsp_config_path_(""),
@@ -51,6 +52,7 @@ XspressDetector::XspressDetector(bool simulation) :
   // Setup a default for maximum channels to initialise all vectors of 
   // scalar and dtc parameters.
   setXspMaxChannels(DEFAULT_MAX_CHANNELS);
+  setXspMcaChannels(DEFAULT_MAX_CHANNELS);
 }
 
 /** Destructor for XspressDetector class.
@@ -379,7 +381,7 @@ int XspressDetector::restoreSettings()
 int XspressDetector::readSCAParams()
 {
 
-  return detector_.read_sca_params(xsp_max_channels_,
+  return detector_.read_sca_params(xsp_mca_channels_,
                                    xsp_chan_sca5_low_lim_,
                                    xsp_chan_sca5_high_lim_,
                                    xsp_chan_sca6_low_lim_,
@@ -394,7 +396,7 @@ void XspressDetector::readFemStatus()
 
   if (checkConnected()){
     // number of frames read out for each channel
-    status = detector_.read_frames(xsp_max_channels_, xsp_status_frames_);
+    status = detector_.read_frames(xsp_mca_channels_, xsp_status_frames_);
     if (status != XSP_STATUS_OK){
       setErrorString("Cannot read frame counters");
     }
@@ -422,7 +424,7 @@ void XspressDetector::readFemStatus()
  */
 int XspressDetector::readDTCParams()
 {
-  return detector_.read_dtc_params(xsp_max_channels_,
+  return detector_.read_dtc_params(xsp_mca_channels_,
                                    xsp_dtc_flags_,
                                    xsp_dtc_all_event_off_,
                                    xsp_dtc_all_event_grad_,
@@ -439,7 +441,7 @@ int XspressDetector::readDTCParams()
  */
 int XspressDetector::writeDTCParams()
 {
-  return detector_.write_dtc_params(xsp_max_channels_,
+  return detector_.write_dtc_params(xsp_mca_channels_,
                                     xsp_dtc_flags_,
                                     xsp_dtc_all_event_off_,
                                     xsp_dtc_all_event_grad_,
@@ -634,56 +636,6 @@ void XspressDetector::setXspMaxChannels(int max_channels)
   if (max_channels != xsp_max_channels_){
     xsp_max_channels_ = max_channels;
 
-    // Re initialise the frames read vector based on the maximum channels
-    xsp_status_frames_.clear();
-    xsp_status_frames_.resize(xsp_max_channels_);
-
-    // Check if we need to initialise the scalar configuration items
-    if (xsp_chan_sca5_low_lim_.size() != max_channels){
-      xsp_chan_sca5_low_lim_.resize(max_channels);
-    }
-    if (xsp_chan_sca5_high_lim_.size() != max_channels){
-      xsp_chan_sca5_high_lim_.resize(max_channels);
-    }
-    if (xsp_chan_sca6_low_lim_.size() != max_channels){
-      xsp_chan_sca6_low_lim_.resize(max_channels);
-    }
-    if (xsp_chan_sca6_high_lim_.size() != max_channels){
-      xsp_chan_sca6_high_lim_.resize(max_channels);
-    }
-    if (xsp_chan_sca4_threshold_.size() != max_channels){
-      xsp_chan_sca4_threshold_.resize(max_channels);
-    }
-
-    // Check if we need to initialise the DTC values
-    if (xsp_dtc_flags_.size() != max_channels){
-      xsp_dtc_flags_.resize(max_channels);
-    }
-    if (xsp_dtc_all_event_off_.size() != max_channels){
-      xsp_dtc_all_event_off_.resize(max_channels);
-    }
-    if (xsp_dtc_all_event_grad_.size() != max_channels){
-      xsp_dtc_all_event_grad_.resize(max_channels);
-    }
-    if (xsp_dtc_all_event_rate_off_.size() != max_channels){
-      xsp_dtc_all_event_rate_off_.resize(max_channels);
-    }
-    if (xsp_dtc_all_event_rate_grad_.size() != max_channels){
-      xsp_dtc_all_event_rate_grad_.resize(max_channels);
-    }
-    if (xsp_dtc_in_window_off_.size() != max_channels){
-      xsp_dtc_in_window_off_.resize(max_channels);
-    }
-    if (xsp_dtc_in_window_grad_.size() != max_channels){
-      xsp_dtc_in_window_grad_.resize(max_channels);
-    }
-    if (xsp_dtc_in_window_rate_off_.size() != max_channels){
-      xsp_dtc_in_window_rate_off_.resize(max_channels);
-    }
-    if (xsp_dtc_in_window_rate_grad_.size() != max_channels){
-      xsp_dtc_in_window_rate_grad_.resize(max_channels);
-    }
-
     // Notify that reconnect is required
     reconnectRequired();
   }
@@ -692,6 +644,71 @@ void XspressDetector::setXspMaxChannels(int max_channels)
 int XspressDetector::getXspMaxChannels()
 {
   return xsp_max_channels_;
+}
+
+void XspressDetector::setXspMcaChannels(int mca_channels)
+{
+  if (mca_channels != xsp_mca_channels_){
+    xsp_mca_channels_ = mca_channels;
+
+    // Re initialise the frames read vector based on the maximum channels
+    xsp_status_frames_.clear();
+    xsp_status_frames_.resize(xsp_mca_channels_);
+
+    // Check if we need to initialise the scalar configuration items
+    if (xsp_chan_sca5_low_lim_.size() != xsp_mca_channels_){
+      xsp_chan_sca5_low_lim_.resize(xsp_mca_channels_);
+    }
+    if (xsp_chan_sca5_high_lim_.size() != xsp_mca_channels_){
+      xsp_chan_sca5_high_lim_.resize(xsp_mca_channels_);
+    }
+    if (xsp_chan_sca6_low_lim_.size() != xsp_mca_channels_){
+      xsp_chan_sca6_low_lim_.resize(xsp_mca_channels_);
+    }
+    if (xsp_chan_sca6_high_lim_.size() != xsp_mca_channels_){
+      xsp_chan_sca6_high_lim_.resize(xsp_mca_channels_);
+    }
+    if (xsp_chan_sca4_threshold_.size() != xsp_mca_channels_){
+      xsp_chan_sca4_threshold_.resize(xsp_mca_channels_);
+    }
+
+    // Check if we need to initialise the DTC values
+    if (xsp_dtc_flags_.size() != xsp_mca_channels_){
+      xsp_dtc_flags_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_all_event_off_.size() != xsp_mca_channels_){
+      xsp_dtc_all_event_off_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_all_event_grad_.size() != xsp_mca_channels_){
+      xsp_dtc_all_event_grad_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_all_event_rate_off_.size() != xsp_mca_channels_){
+      xsp_dtc_all_event_rate_off_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_all_event_rate_grad_.size() != xsp_mca_channels_){
+      xsp_dtc_all_event_rate_grad_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_in_window_off_.size() != xsp_mca_channels_){
+      xsp_dtc_in_window_off_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_in_window_grad_.size() != xsp_mca_channels_){
+      xsp_dtc_in_window_grad_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_in_window_rate_off_.size() != xsp_mca_channels_){
+      xsp_dtc_in_window_rate_off_.resize(xsp_mca_channels_);
+    }
+    if (xsp_dtc_in_window_rate_grad_.size() != xsp_mca_channels_){
+      xsp_dtc_in_window_rate_grad_.resize(xsp_mca_channels_);
+    }
+
+    // Notify that reconnect is required
+    reconnectRequired();
+  }
+}
+
+int XspressDetector::getXspMcaChannels()
+{
+  return xsp_mca_channels_;
 }
 
 void XspressDetector::setXspMaxSpectra(int max_spectra)
@@ -1115,7 +1132,7 @@ std::vector<uint32_t> XspressDetector::getLiveScalars(uint32_t index)
   if (daq_){
     reply = daq_->read_live_scalar(index);
   } else {
-    reply.resize(xsp_max_channels_);
+    reply.resize(xsp_mca_channels_);
   }
   return reply;
 }
@@ -1126,7 +1143,7 @@ std::vector<double> XspressDetector::getLiveDtcFactors()
   if (daq_){
     reply = daq_->read_live_dtc();
   } else {
-    reply.resize(xsp_max_channels_);
+    reply.resize(xsp_mca_channels_);
   }
   return reply;
 }
@@ -1137,7 +1154,7 @@ std::vector<double> XspressDetector::getLiveInpEst()
   if (daq_){
     reply = daq_->read_live_inp_est();
   } else {
-    reply.resize(xsp_max_channels_);
+    reply.resize(xsp_mca_channels_);
   }
   return reply;
 }

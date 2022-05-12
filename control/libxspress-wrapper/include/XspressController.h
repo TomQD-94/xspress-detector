@@ -79,6 +79,7 @@ private:
   static const std::string CONFIG_XSP_NUM_TF;
   static const std::string CONFIG_XSP_BASE_IP;
   static const std::string CONFIG_XSP_MAX_CHANNELS;
+  static const std::string CONFIG_XSP_MCA_CHANNELS;
   static const std::string CONFIG_XSP_MAX_SPECTRA;
   static const std::string CONFIG_XSP_DEBUG;
   static const std::string CONFIG_XSP_CONFIG_PATH;

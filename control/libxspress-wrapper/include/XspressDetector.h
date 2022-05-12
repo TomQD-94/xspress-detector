@@ -83,6 +83,8 @@ public:
   std::string getXspBaseIP();
   void setXspMaxChannels(int max_channels);
   int getXspMaxChannels();
+  void setXspMcaChannels(int mca_channels);
+  int getXspMcaChannels();
   void setXspMaxSpectra(int max_spectra);
   int getXspMaxSpectra();
   void setXspDebug(int debug);
@@ -173,6 +175,8 @@ private:
   std::string                   xsp_base_IP_;
   /** Set the maximum number of channels */
   int                           xsp_max_channels_;
+  /** Set the number of channels in mca mode */
+  int                           xsp_mca_channels_;
   /** Set the maximum number of spectra (eg 4096) */
   int                           xsp_max_spectra_;
   /** Enable debug messages */

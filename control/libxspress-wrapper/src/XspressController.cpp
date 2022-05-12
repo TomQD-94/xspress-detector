@@ -32,6 +32,7 @@ const std::string XspressController::CONFIG_XSP_NUM_CARDS             = "num_car
 const std::string XspressController::CONFIG_XSP_NUM_TF                = "num_tf";
 const std::string XspressController::CONFIG_XSP_BASE_IP               = "base_ip";
 const std::string XspressController::CONFIG_XSP_MAX_CHANNELS          = "max_channels";
+const std::string XspressController::CONFIG_XSP_MCA_CHANNELS          = "mca_channels";
 const std::string XspressController::CONFIG_XSP_MAX_SPECTRA           = "max_spectra";
 const std::string XspressController::CONFIG_XSP_DEBUG                 = "debug";
 const std::string XspressController::CONFIG_XSP_CONFIG_PATH           = "config_path";
@@ -488,6 +489,13 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
     xsp_.setXspMaxChannels(max_channels);
   }
 
+  // Check for the maximum number of channels available in the Xspress
+  if (config.has_param(XspressController::CONFIG_XSP_MCA_CHANNELS)) {
+    int mca_channels = config.get_param<int>(XspressController::CONFIG_XSP_MCA_CHANNELS);
+    LOG4CXX_DEBUG_LEVEL(1, logger_, "mca_channels set to  " << mca_channels);
+    xsp_.setXspMcaChannels(mca_channels);
+  }
+
   // Check for the maximum number of spectra available in the Xspress
   if (config.has_param(XspressController::CONFIG_XSP_MAX_SPECTRA)) {
     int max_spectra = config.get_param<int>(XspressController::CONFIG_XSP_MAX_SPECTRA);
@@ -836,6 +844,8 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
                   XspressController::CONFIG_XSP_BASE_IP, xsp_.getXspBaseIP());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_MAX_CHANNELS, xsp_.getXspMaxChannels());
+  reply.set_param(XspressController::CONFIG_XSP + "/" +
+                  XspressController::CONFIG_XSP_MCA_CHANNELS, xsp_.getXspMcaChannels());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
                   XspressController::CONFIG_XSP_MAX_SPECTRA, xsp_.getXspMaxSpectra());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
