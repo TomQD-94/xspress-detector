@@ -6,6 +6,8 @@ Created on March 2022
 import json
 import logging
 import os
+import asyncio
+import time
 from odin_data.ipc_tornado_client import IpcTornadoClient
 from odin_data.util import remove_prefix, remove_suffix
 from odin_data.odin_data_adapter import OdinDataAdapter
@@ -45,28 +47,96 @@ class FPXspressAdapter(FPCompressionAdapter):
         :param kwargs:
         """
         logging.debug("FPXspressAdapter init called")
+        self._xsp_adapter = None
+        self._xsp_adapter_name = "xsp"
         super(FPXspressAdapter, self).__init__(**kwargs)
+
+
+    def initialize(self, adapters):
+        """Initialize the adapter after it has been loaded.
+        Find and record the FR adapter for later error checks
+        """
+        logging.info("Intercepting the Xspress control adapter")
+        if self._xsp_adapter_name in adapters:
+            self._xsp_adapter = adapters[self._xsp_adapter_name]
+            logging.info("FP adapter initiated connection to Xspress adapter: {}".format(self._xsp_adapter_name))
+        else:
+            logging.error("FP adapter could not connect to the Xspress adapter: {}".format(self._xsp_adapter_name))
+        super(FPXspressAdapter, self).initialize(adapters)
 
     @request_types('application/json', 'application/vnd.odin-native')
     @response_types('application/json', default='application/json')
     def put(self, path, request):  # pylint: disable=W0613
-        logging.error("IN HERE!")
         if path == self._command:
-            write = bool_from_string(str(escape.url_unescape(request.body)))
-            if not write:
-                # Attempt initialisation of the connected clients
-                for client in self._clients:
-                    try:
+            # Check the mode we are running in (mca or list)
+            mode = self._xsp_adapter.detector.mode
+
+            if mode == 'list':
+                num_clients = self._xsp_adapter.detector.num_process_list
+                write = bool_from_string(str(escape.url_unescape(request.body)))
+                if write:
+                    config = {'hdf': {'write': write}}
+                    # Before attempting to write files, make some simple error checks
+
+                    # Check if we have a valid buffer status from the FR adapter
+                    valid, reason = self.check_fr_status()
+                    if not valid:
+                        raise RuntimeError(reason)
+
+                    # Check the file path is valid
+                    if not os.path.isdir(str(self._param['config/hdf/file/path'])):
+                        raise RuntimeError("Invalid path specified [{}]".format(str(self._param['config/hdf/file/path'])))
+                    # Check the filename exists
+                    if str(self._param['config/hdf/file/name']) == '':
+                        raise RuntimeError("File name must not be empty")
+
+                    # First setup the rank for the frameProcessor applications
+                    self.setup_rank()
+                    rank = 0
+                    for client in self._clients[0:num_clients]:
+                        # Send the configuration required to setup the acquisition
+                        # The file path is the same for all clients
                         parameters = {
-                            'xspress-list': {
-                                'flush': True
+                            'hdf': {
+                                'frames': self._param['config/hdf/frames']
                             }
                         }
-                        logging.error("Sending: {}".format(parameters))
+                        # Send the number of frames first
                         client.send_configuration(parameters)
-                    except Exception as err:
-                        logging.debug(OdinDataAdapter.ERROR_FAILED_TO_SEND)
-                        logging.error("Error: %s", err)
+                        parameters = {
+                            'hdf': {
+                                'acquisition_id': self._param['config/hdf/acquisition_id'],
+                                'file': {
+                                    'path': str(self._param['config/hdf/file/path']),
+                                    'name': str(self._param['config/hdf/file/name']),
+                                    'extension': str(self._param['config/hdf/file/extension'])
+                                }
+                            }
+                        }
+                        client.send_configuration(parameters)
+                        rank += 1
+                    for client in self._clients[0:num_clients]:
+                        # Send the configuration required to start the acquisition
+                        client.send_configuration(config)
+                else:
+                    # Flush and close FPs in list mode
+                    for client in self._clients[0:num_clients]:
+                        try:
+                            parameters = {
+                                'xspress-list': {
+                                    'flush': True
+                                }
+                            }
+                            client.send_configuration(parameters)
+                        except Exception as err:
+                            logging.debug(OdinDataAdapter.ERROR_FAILED_TO_SEND)
+                            logging.error("Error: %s", err)
+
+                status_code = 200
+                response = {}
+                logging.info("Xspress FP adapter flushed in list mode")
+                return ApiAdapterResponse(response, status_code=status_code)
+
         return super(FPXspressAdapter, self).put(path, request)
 
 
@@ -90,7 +160,7 @@ class FPXspressAdapter(FPCompressionAdapter):
                         'reset': True
                     }
                 }
-                logging.error("Sending: {}".format(parameters))
+                logging.debug("Sending: {}".format(parameters))
 
                 client.send_configuration(parameters)
             except Exception as err:
