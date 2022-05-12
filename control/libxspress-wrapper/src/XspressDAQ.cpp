@@ -414,9 +414,15 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
               live_scalar_7_[c_index + channel_index] = s_ptr[(c_index*9)+7];
               live_scalar_8_[c_index + channel_index] = s_ptr[(c_index*9)+8];
 
-              live_dtc_[c_index + channel_index] = dtc_ptr[c_index];
+              if (isinf(dtc_ptr[c_index]) || isnan(dtc_ptr[c_index])){
+                LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] DTC infinity/NaN detected, defaulting to 1.0");
+                live_dtc_[c_index + channel_index] = 1.0;
+              } else {
+                live_dtc_[c_index + channel_index] = dtc_ptr[c_index];
+              }
               live_inp_est_[c_index + channel_index] = inp_est_ptr[c_index];
-
+              LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] DTC [" << channel_index+c_index << "] " << live_dtc_[c_index + channel_index]);
+              LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] Input estimate [" << channel_index+c_index << "] " << live_inp_est_[c_index + channel_index]);
               LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] Scalers [" << channel_index+c_index << 
                                   "] " << s_ptr[(c_index*9)+0] <<
                                   " " << s_ptr[(c_index*9)+1] <<
