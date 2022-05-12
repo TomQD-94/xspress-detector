@@ -12,6 +12,7 @@ using namespace log4cxx::helpers;
 #include "FrameDecoderUDP.h"
 #include "XspressDefinitions.h"
 #include "IpcMessage.h"
+#include "gettime.h"
 
 namespace FrameReceiver {
 
@@ -76,6 +77,10 @@ class XspressListModeFrameDecoder : public FrameDecoderUDP {
     std::map<std::string, uint32_t> channel_map_;
     struct sockaddr_in server_address_;
     int server_socket_;
+    // Init time structure
+    struct timespec init_time_;
+    // Initialising flag
+    bool initialising_;
   };
 
 }

@@ -12,6 +12,7 @@ using namespace log4cxx::helpers;
 
 #include "FrameProcessorPlugin.h"
 #include "XspressDefinitions.h"
+#include "gettime.h"
 
 namespace FrameProcessor
 {

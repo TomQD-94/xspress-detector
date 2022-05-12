@@ -8,6 +8,8 @@
 #define XSPRESS_ACK_PORT 30124
 // Size of ACK packet (int32 words)
 #define XSPRESS_ACK_SIZE 6
+// Initialisation time (us).  For this duration after init packets will be ignored
+#define XSPRESS_INIT_TIME 1000000
 
 namespace FrameReceiver {
 
@@ -18,7 +20,8 @@ namespace FrameReceiver {
       current_frame_buffer_id_(-1),
       current_state(WAITING_FOR_HEADER),
       frames_dropped_(0),
-      server_socket_(0)
+      server_socket_(0),
+      initialising_(true)
     {
       // Allocate memory for the dropped frames buffer
       current_raw_packet_header_.reset(new uint8_t[Xspress::packet_header_size]);
@@ -60,7 +63,8 @@ namespace FrameReceiver {
         this->logger_->setLevel(Level::getAll());
         FrameDecoder::init(logger, config_msg);
         LOG4CXX_INFO(logger_, "Xspress list mode frame decoder init complete");
-    }
+        gettime(&init_time_);
+  }
 
     void XspressListModeFrameDecoder::request_configuration(const std::string param_prefix, OdinData::IpcMessage& config_reply)
     {
@@ -84,12 +88,28 @@ namespace FrameReceiver {
 
     void XspressListModeFrameDecoder::process_packet_header(size_t bytes_received, int port, struct sockaddr_in* from_addr)
     {
+      if (initialising_){
+        // For the initialisation duration ignore incoming spurious packets to allow time for the FP 
+        // applications to initialise
+        struct timespec current_time;
+        gettime(&current_time);
+        uint64_t ts = elapsed_us(init_time_, current_time);
+        if (ts > XSPRESS_INIT_TIME){
+          // Initialise time has elapsed, we are no longer initialising
+          initialising_ = false;
+        } else {
+          LOG4CXX_DEBUG_LEVEL(1, logger_, "Unexpected packet during initialisation, dropping...");
+        }
+      }
+
       if (current_frame_buffer_id_ == -1){
-        if (empty_buffer_queue_.empty()){
+        if (empty_buffer_queue_.empty() || initialising_){
           current_frame_buffer_ = dropped_frame_buffer_.get();
           if (!dropping_frame_data_){
             uint64_t *lptr = (uint64_t *)get_packet_header_buffer();
-            LOG4CXX_ERROR(logger_, "Time Frame: " << XSP_SOF_GET_FRAME(*lptr) << " received but no free buffers available. Dropping packet");
+            if (!initialising_){
+              LOG4CXX_ERROR(logger_, "Time Frame: " << XSP_SOF_GET_FRAME(*lptr) << " received but no free buffers available. Dropping packet");
+            }
             dropping_frame_data_ = true;
           }
         } else {
@@ -168,6 +188,7 @@ namespace FrameReceiver {
         write(server_socket_, tbuff, sizeof(u_int32_t)*XSPRESS_ACK_SIZE);
       }
 
+      LOG4CXX_DEBUG_LEVEL(3, logger_, "Packet => channel_of_card: " << chan_of_card << " channel: " << channel << " socket: " << ip << ":" << port);
       // Set the size of the packet in the frame header
       current_frame_header_->packet_headers[current_frame_header_->packets_received].packet_size = bytes_received;
       // Set the channel number in the frame header
