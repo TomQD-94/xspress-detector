@@ -17,6 +17,7 @@ from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 
 from .client import AsyncClient
+from .util import ListModeIPPortGen
 from .debug import debug_method
 
 ENDPOINT_TEMPLATE = "tcp://{}:{}"
@@ -400,9 +401,9 @@ class XspressDetector(object):
             },
             XspressDetectorStr.STATUS : {
                 XspressDetectorStr.STATUS_SENSOR : {
-                    XspressDetectorStr.STATUS_SENSOR_HEIGHT: (lambda: self.max_channels, {}),
+                    XspressDetectorStr.STATUS_SENSOR_HEIGHT: (lambda: self.mca_channels, {}),
                     XspressDetectorStr.STATUS_SENSOR_WIDTH: (lambda: self.max_spectra, {}),
-                    XspressDetectorStr.STATUS_SENSOR_BYTES: (lambda: self.max_spectra * self.max_channels * 4, {}), # 4 bytes per int32 point
+                    XspressDetectorStr.STATUS_SENSOR_BYTES: (lambda: self.max_spectra * self.mca_channels * 4, {}), # 4 bytes per int32 point
                 },
                 XspressDetectorStr.STATUS_MANUFACTURER: (lambda: "Quantum Detectors", {}),
                 XspressDetectorStr.STATUS_MODEL: (lambda: "Xspress 4", {}),
@@ -574,7 +575,7 @@ class XspressDetector(object):
     @property
     def num_chan_per_process_mca(self):
         '''
-        this is correct if num_process%max_channels == 0
+        this is correct if num_process % mca_channels == 0
         '''
         return self.mca_channels//self.num_process_mca
 
@@ -604,7 +605,7 @@ class XspressDetector(object):
         if mode == XSPRESS_MODE_MCA:
             dataset_values = {"dims": [16, 4096], "chunks": [256, 16, 4096]} if self.use_resgrades \
                         else {"dims": [1, 4096], "chunks": [256, 1, 4096]}
-            for i in range(self.max_channels):
+            for i in range(self.mca_channels):
                 fp_index = i//self.num_chan_per_process_mca
                 configs[fp_index]["hdf"]["dataset"][f"mca_{i}"] = dataset_values
 
@@ -614,53 +615,18 @@ class XspressDetector(object):
         result = await asyncio.gather(*tasks)
 
     async def configure_frs(self, mode: int):
-        port_mapping = [
-            {
-                "ip": "192.168.0.65",
-                "ports": "30125,30126,30127,30128,30129,"
-            },
-            {
-                "ip": "192.168.0.65",
-                "ports": "30130,30131,30132,30133,30134,"
-            },
-            {
-                "ip": "192.168.0.69",
-                "ports": "30125,30126,30127,30128,30129,"
-            },
-            {
-                "ip": "192.168.0.69",
-                "ports": "30130,30131,30132,30133,30134,"
-            },
-            {
-                "ip": "192.168.0.73",
-                "ports": "30125,30126,30127,30128,30129,"
-            },
-            {
-                "ip": "192.168.0.73",
-                "ports": "30130,30131,30132,30133,30134,"
-            },
-            {
-                "ip": "192.168.0.77",
-                "ports": "30125,30126,30127,30128,30129,"
-            },
-            {
-                "ip": "192.168.0.77",
-                "ports": "30130,30131,30132,30133,30134,"
-            }
-        ]
-
 
         if mode == XSPRESS_MODE_LIST:
             configs = \
             [
                 {
-                    "rx_ports": port_mapping[index]['ports'],
+                    "rx_ports": ",".join([str(p) for p in ports]),
                     "rx_type": "udp",
                     "decoder_type": "XspressListMode",
-                    "rx_address": port_mapping[index]['ip'],
+                    "rx_address": ip,
                     "rx_recv_buffer_size":30000000
                 }
-                for index in range(self.num_process_list)
+                for ip, ports in ListModeIPPortGen(self.num_chan_per_process_list, self.num_process_list)
             ]
         elif mode == XSPRESS_MODE_MCA:
             configs = \
