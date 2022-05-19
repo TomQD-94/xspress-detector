@@ -8,17 +8,12 @@
         "system_error": "cpp",
         "*.ipp": "cpp"
     },
+    "workbench.colorCustomizations": {
+        "titleBar.activeBackground": "#ff9d34",
+        "statusBar.background" : "#ffdd8d",
+    },
     "cmake.configureOnOpen": false,
     "python.pythonPath": "/dls_sw/work/R3.14.12.7/support/xspress-odin/xspress-detector/control/xspress/.venvs/xspress-ZEYHa99R/bin/python",
-    "prettier.configPath": ".prettierrc",
-    "editor.defaultFormatter": "esbenp.prettier-vscode",
-    "[javascript]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
-    },
-    "[html]": {
-        "editor.defaultFormatter": "vscode.html-language-features"
-    },
-    "prettier.enableDebugLogs": true,
     "editor.tokenColorCustomizations": {
         "[Solarized Light]": {
             "textMateRules": [
