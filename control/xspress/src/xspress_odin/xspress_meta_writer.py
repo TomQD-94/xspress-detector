@@ -19,7 +19,7 @@ from odin_data.meta_writer.hdf5dataset import (
     StringHDF5Dataset,
 )
 from odin_data.util import construct_version_dict
-import _version as versioneer
+from . import _version as versioneer
 
 # Data message types
 XSPRESS_SCALARS = "xspress_scalars"
