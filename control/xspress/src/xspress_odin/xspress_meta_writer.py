@@ -43,31 +43,27 @@ class XspressMetaWriter(MetaWriter):
     def __init__(self, name, directory, endpoints, config):
         # This must be defined for _define_detector_datasets in base class __init__
         self._sensor_shape = config.sensor_shape
-        print("initialising XspressMetaWriter")
-        if config.int_args is None:
-            raise RuntimeError("Attribute int_args in MetaWriterConfig needs to be supplied. config.int1 == max_channels")
-        self._num_channels, *rest = config.int_args
+        self._num_channels = self._sensor_shape[0]
 
         super(XspressMetaWriter, self).__init__(name, directory, endpoints, config)
 #        self._detector_finished = False  # Require base class to check we have finished
 
+        self._logger.info("Num channels set to: {}".format(self._num_channels))
         self._series = None
         self._flush_time = datetime.now()
+        self._logger.info("Initialised XspressMetaWriter")
 
     def _define_detector_datasets(self):
         dsets = []
-        self._logger.error("IN HERE")
         for index in range(self._num_channels):
             scalar_name = "{}{}".format(DATASET_SCALAR, index)
             dtc_name = "{}{}".format(DATASET_DTC, index)
             inp_est_name = "{}{}".format(DATASET_INP_EST, index)
-            self._logger.error("Adding dataset: {}".format(scalar_name))
+            self._logger.info("Adding dataset: {}".format(scalar_name))
             dsets.append(Int32HDF5Dataset(scalar_name, shape=(0, XSPRESS_SCALARS_PER_CHANNEL), maxshape=(None, XSPRESS_SCALARS_PER_CHANNEL), rank=2, cache=True, block_size=2000))
-            self._logger.error("Adding dataset: {}".format(dtc_name))
-            #dsets.append(Float64HDF5Dataset(dtc_name))
+            self._logger.info("Adding dataset: {}".format(dtc_name))
             dsets.append(Float64HDF5Dataset(dtc_name, shape=(0,), maxshape=(None,), rank=1, cache=True, block_size=2000))
-            self._logger.error("Adding dataset: {}".format(inp_est_name))
-            #dsets.append(Float64HDF5Dataset(inp_est_name))
+            self._logger.info("Adding dataset: {}".format(inp_est_name))
             dsets.append(Float64HDF5Dataset(inp_est_name, shape=(0,), maxshape=(None,), rank=1, cache=True, block_size=2000))
 
         dsets.append(Int64HDF5Dataset(DATASET_DAQ_VERSION))
@@ -110,9 +106,9 @@ class XspressMetaWriter(MetaWriter):
                 self._add_value(dataset_name, scalars, offset=None)
                 #self._logger.error("Length after: {}".format(self._datasets[dataset_name]._h5py_dataset.len()))
             
-#        if (datetime.now() - self._flush_time).total_seconds() > 1.0:
-#            self._flush_datasets()
-#            self._flush_time = datetime.now()
+        if (datetime.now() - self._flush_time).total_seconds() > 0.5:
+            self._flush_datasets()
+            self._flush_time = datetime.now()
 
     def handle_xspress_dtc(self, header, _data):
         """Handle global header message part 1"""
