@@ -13,7 +13,6 @@ from contextlib import suppress
 
 from odin.adapters.adapter import ApiAdapterRequest, ApiAdapter
 from odin_data.ipc_message import IpcMessage
-from odin_data.ipc_channel import _cast_str
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 
 from .client import AsyncClient

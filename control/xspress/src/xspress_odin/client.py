@@ -7,8 +7,7 @@ import asyncio
 from odin_data.ipc_message import IpcMessage
 from zmq.eventloop.zmqstream import ZMQStream
 from zmq.utils.monitor import parse_monitor_message
-from zmq.utils.strtypes import unicode, cast_bytes
-from odin_data.ipc_channel import _cast_str
+from zmq.utils.strtypes import unicode, cast_bytes, cast_unicode
 
 
 DEFAULT_TIMEOUT = 5
@@ -142,7 +141,7 @@ class AsyncClient(AbstractClient):
         raise TimeoutError(f"AsyncClient.send_recv timed out on message {id}:\n{msg}")
 
     def _on_recv_callback(self, msg):
-        data = _cast_str(msg[0])
+        data = cast_unicode(msg[0])
         logging.debug(f"message recieved = {data}")
         ipc_msg : IpcMessage = IpcMessage(from_str=data)
         id = ipc_msg.get_msg_id()
