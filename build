@@ -1,5 +1,5 @@
 PROGRAM=xspress-detector
-VERSION=0.0.1
+VERSION=0.1.0
 TAR_FILE=none
 
 build()
@@ -9,7 +9,7 @@ build()
     # to configure/RELEASE: it stuffs the TOOLS_SUPPORT macro in there regardless of
     # whether or not it is already there! This causes the git repo to have local changes
     # and in turn this causes the python build to create an egg with a 'dirty' version.
-#    git checkout -- ../configure/RELEASE
+    git checkout -- ../configure/RELEASE
     
     ${CMAKE_BIN}/cmake \
                        -DBoost_NO_BOOST_CMAKE=ON \
