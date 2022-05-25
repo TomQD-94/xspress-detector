@@ -32,18 +32,21 @@ build()
                        ${BUILD_SCRIPT_DIR}/control/libxspress-wrapper
     make VERBOSE=1 && make install
     
-    # Removing pesky dist dir just in case a previous build is left over
-#    rm -rf $BUILD_SCRIPT_DIR/control/dist 
-#
-#    python_depends ENUM CONFIGPARSER ODIN_CONTROL ODIN_DATA
-#    
-#    export BOOST_ROOT=$BOOST_PREFIX
-#    export SRC=$BUILD_SCRIPT_DIR/control
-#    setuptools_build # Defined in Python/CONFIG
-#
-#    # Install the static html files for the odin control server
-#    mkdir ${TARGET_PREFIX}/html
-#    cp -r $BUILD_SCRIPT_DIR/control/static ${TARGET_PREFIX}/html/
+
+    # Build a wheel for separate release to DLS python3 area
+    cd ${BUILD_SCRIPT_DIR}/control/xspress
+    rm -rf ${TARGET_PREFIX}/dist
+    dls-python3 setup.py bdist_wheel --dist-dir ${TARGET_PREFIX}/dist
+
+    # Copy to work distributions directory for python3ext release to find
+    if [[ ${is_test} == false ]]; then
+        DIST_DIR=/dls_sw/work/python3/RHEL7-x86_64/distributions
+        echo "Copying distribution files and Pipfile.lock to ${DIST_DIR}"
+        cp ${TARGET_PREFIX}/dist/* ${DIST_DIR}
+        cp Pipfile.lock ${DIST_DIR}/${_module}-${_version}.Pipfile.lock
+        echo "Run 'dls-release.py -t -a python3ext ${_module} ${_version}' to release to python3 area"
+    fi
+
 }
 
 
