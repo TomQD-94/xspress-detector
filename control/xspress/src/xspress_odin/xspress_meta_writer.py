@@ -106,7 +106,7 @@ class XspressMetaWriter(MetaWriter):
                 self._add_value(dataset_name, scalars, offset=None)
                 #self._logger.error("Length after: {}".format(self._datasets[dataset_name]._h5py_dataset.len()))
             
-        if (datetime.now() - self._flush_time).total_seconds() > 0.5:
+        if (datetime.now() - self._flush_time).total_seconds() > 0.25:
             self._flush_datasets()
             self._flush_time = datetime.now()
 
