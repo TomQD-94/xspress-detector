@@ -95,9 +95,9 @@
         },
         "odin-data": {
             "hashes": [
-                "sha256:b4446e64d4f5105a1e2caa486e5898542d74db671e821054aa52385ceb6c3673"
+                "sha256:0aec546b35b9d82ba393497d4618fc0146fa8ce052a32d910ebd9fce35d222ff"
             ],
-            "version": "==1.7.0+dls1"
+            "version": "==1.7.0+dls2"
         },
         "ply": {
             "hashes": [
@@ -725,9 +725,9 @@
         },
         "odin-data": {
             "hashes": [
-                "sha256:b4446e64d4f5105a1e2caa486e5898542d74db671e821054aa52385ceb6c3673"
+                "sha256:0aec546b35b9d82ba393497d4618fc0146fa8ce052a32d910ebd9fce35d222ff"
             ],
-            "version": "==1.7.0+dls1"
+            "version": "==1.7.0+dls2"
         },
         "packaging": {
             "hashes": [
