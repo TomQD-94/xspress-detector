@@ -20,7 +20,7 @@ build()
                        ${BUILD_SCRIPT_DIR}/data
     make VERBOSE=1 && make install
 
-    rm -rf ${BUILD_SCRIPT_DIR}/build_name/*
+    rm -rf ${BUILD_SCRIPT_DIR}/${BUILD_NAME}/*
 
     
     ${CMAKE_BIN}/cmake \
