@@ -258,6 +258,10 @@ void XspressController::handleCtrlChannel()
  */
 void XspressController::provideStatus(OdinData::IpcMessage& reply)
 {
+  // Check the acquisition failed state
+  if (xsp_.getXspAcqFailed()){
+    setError(xsp_.getErrorString());
+  }
   // Return the current error status
   reply.set_param(XspressController::STATUS + "/" +
     XspressController::STATUS_ERROR, error_);
@@ -402,6 +406,8 @@ void XspressController::configure(OdinData::IpcMessage& config, OdinData::IpcMes
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Configuration submitted: " << config.encode());
   // First clear out any existing error message
   setError("");
+  // Reset any failed acquisition error messages
+  xsp_.resetXspAcqFailed();
 
   // Check to see if we are configuring this control application
   if (config.has_param(XspressController::CONFIG_APP)) {

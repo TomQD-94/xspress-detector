@@ -138,6 +138,8 @@ public:
   std::vector<double> getLiveDtcFactors();
   std::vector<double> getLiveInpEst();
   bool getXspAcquiring();
+  bool getXspAcqFailed();
+  void resetXspAcqFailed();
   uint32_t getXspFramesRead();
   std::vector<float> getTemperature0();
   std::vector<float> getTemperature1();
@@ -161,6 +163,8 @@ private:
   bool                          connected_;
   /** Is the detector acquiring */
   bool                          acquiring_;
+  /** Did the acquisition fail */
+  bool                          acq_failed_;
   /** Card connected flags */
   std::vector<bool>             cards_connected_;
   /** Channels connected through each card */

@@ -25,6 +25,7 @@ XspressDetector::XspressDetector(bool simulation) :
     simulated_(simulation),
     connected_(false),
     reconnect_required_(false),
+    acq_failed_(false),
     xsp_num_cards_(0),
     xsp_num_tf_(0),
     xsp_base_IP_(""),
@@ -1179,11 +1180,27 @@ bool XspressDetector::getXspAcquiring()
       // Check the DAQ flag.  If it is false then reset our flag
       if (!daq_->getAcqRunning()){
         acquiring_ = false;
+        // Check to see if the acquisition failed
+        if (daq_->getAcqFailed()){
+          // If the acquisition failed propagate the error
+          setErrorString("Acquisition Failed: " + detector_.getErrorString());
+          acq_failed_ = true;
+        }
       }
     }
   }
   // The second job is to return the acquiring state
   return acquiring_;
+}
+
+bool XspressDetector::getXspAcqFailed()
+{
+  return acq_failed_;
+}
+
+void XspressDetector::resetXspAcqFailed()
+{
+  acq_failed_ = false;
 }
 
 uint32_t XspressDetector::getXspFramesRead()

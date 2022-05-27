@@ -31,6 +31,7 @@ XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr,
     waiting_for_acq_(true),
     acq_running_(false),
     no_of_frames_(0),
+    acq_failed_(false),
     logger_(log4cxx::Logger::getLogger("Xspress.XspressDAQ"))
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
@@ -212,6 +213,11 @@ bool XspressDAQ::getAcqRunning()
   return acq_running_;
 }
 
+bool XspressDAQ::getAcqFailed()
+{
+  return acq_failed_;
+}
+
 uint32_t XspressDAQ::getFramesRead()
 {
   return no_of_frames_;
@@ -226,6 +232,7 @@ void XspressDAQ::controlTask()
     LOG4CXX_INFO(logger_, "DAQ ctrl thread waiting for acquisition start");
     boost::shared_ptr<XspressDAQTask> task = ctrl_queue_->remove();
     waiting_for_acq_ = false;
+    acq_failed_ = false;
     if (task->type_ == DAQ_TASK_TYPE_START){
       int32_t total_frames = task->value1_;
       LOG4CXX_INFO(logger_, "DAQ ctrl thread started with [" << total_frames << "] frames");
@@ -270,13 +277,11 @@ void XspressDAQ::controlTask()
               sleep(0.001);
           }
         } else {
-          LOG4CXX_ERROR(logger_, "Error: " << "INSERT MSG" << " Aborting acquisition");
+          LOG4CXX_ERROR(logger_, "Error: " << detector_->getErrorString() << " - Aborting acquisition");
+          acq_failed_ = true;
           acq_running_ = false;
           // Abort the acquisition
           detector_->histogram_stop(0);
-          //detector_->histogram_stop(1);
-          //detector_->histogram_stop(2);
-          //detector_->histogram_stop(3);
         }
       }
       LOG4CXX_INFO(logger_, "DAQ thread completed, read " << frames_read << " frames");

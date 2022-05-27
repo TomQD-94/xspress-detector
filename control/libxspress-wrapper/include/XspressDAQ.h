@@ -70,6 +70,7 @@ public:
   void startAcquisition(uint32_t frames);
   void stopAcquisition();
   bool getAcqRunning();
+  bool getAcqFailed();
   uint32_t getFramesRead();
   void controlTask();
   void workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressDAQTask> > > queue,
@@ -114,6 +115,8 @@ private:
   bool acq_running_;
   /** Number of frames read out of shared memory in current acquisition */
   uint32_t no_of_frames_;
+  /** Has an acquisition failed */
+  bool acq_failed_;
 
   /** Live scalar values */
   std::vector<uint32_t>         live_scalar_0_;
