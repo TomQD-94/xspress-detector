@@ -4,10 +4,9 @@ LOG4CXX = $(TOOLS_SUPPORT)/log4cxx/0-10-0dls2
 ZEROMQ = $(TOOLS_SUPPORT)/zeromq/3-2-4
 
 # WORK=/dls_sw/work/R3.14.12.7/support/xspress-odin
-ODIN_DATA = /dls_sw/work/R3.14.12.7/support/xspress-odin/odin-data
+ODIN_DATA = $(TOOLS_SUPPORT)/odin-data/1.7.0+dls2
 
 H5PY = $(TOOLS_SUPPORT)/h5py/2-9-0
 NUMPY  = $(TOOLS_SUPPORT)/numpy/1-13-1
 PYZMQ  = $(TOOLS_SUPPORT)/pyzmq/17-1-0
 PYGELF  = $(TOOLS_SUPPORT)/pygelf/0-3-5
-ODIN_CONTROL = /dls_sw/work/R3.14.12.7/support/xspress-odin/odin-control
