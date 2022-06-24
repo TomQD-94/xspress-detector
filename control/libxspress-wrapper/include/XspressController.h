@@ -42,7 +42,7 @@ namespace Xspress
 class XspressController : public boost::enable_shared_from_this<XspressController>
 {
 public:
-  XspressController();
+  XspressController(bool simulation);
   virtual ~XspressController();
   void setError(const std::string& error);
   void handleCtrlChannel();
@@ -189,7 +189,7 @@ private:
   /** IpcChannel for control messages */
   OdinData::IpcChannel                                            ctrlChannel_;
   /** The Xspress hardware wrapper object */
-  XspressDetector                                                 xsp_;
+  boost::shared_ptr<XspressDetector>                              xsp_;
   /** Error string */
   std::string                                                     error_;
   /** State string */

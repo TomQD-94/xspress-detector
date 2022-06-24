@@ -55,7 +55,7 @@ public:
 class XspressDAQ
 {
 public:
-  XspressDAQ(LibXspressWrapper *detector_ptr,
+  XspressDAQ(boost::shared_ptr<ILibXspress> detector_ptr,
              uint32_t num_channels,
              uint32_t num_spectra,
              std::vector<std::string> endpoints);
@@ -81,7 +81,7 @@ public:
 
 private:
   /** libxspress wrapper object ptr */
-  LibXspressWrapper             *detector_;
+  boost::shared_ptr<ILibXspress> detector_;
   /** Pointer to the logging facility */
   log4cxx::LoggerPtr            logger_;
   /** Number of channels to monitor */

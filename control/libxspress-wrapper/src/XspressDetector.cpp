@@ -50,7 +50,15 @@ XspressDetector::XspressDetector(bool simulation) :
     xsp_mode_(XSP_MODE_MCA)
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
-  LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing XspressDetector");
+  LOG4CXX_INFO(logger_, "Constructing XspressDetector");
+
+  if (!simulation){
+    LOG4CXX_INFO(logger_, "Loading LibXspressWrapper object");
+    detector_ = boost::shared_ptr<ILibXspress>(new LibXspressWrapper()); 
+  } else {
+    LOG4CXX_INFO(logger_, "Loading LibXspressSimulator object");
+    detector_ = boost::shared_ptr<ILibXspress>(new LibXspressSimulator()); 
+  }
 
   // Setup a default for maximum channels to initialise all vectors of 
   // scalar and dtc parameters.
@@ -81,7 +89,7 @@ std::string XspressDetector::getVersionString()
 {
   std::string version = "Not connected";
   if (connected_){
-    version = detector_.getVersionString();
+    version = detector_->getVersionString();
   }
   return version;
 }
@@ -120,20 +128,16 @@ int XspressDetector::connect_mca_mode()
   }
 
   if (status == XSP_STATUS_OK){
-    if (simulated_){
-
-    } else {
-      // Call the detector configure method
-      status = detector_.configure_mca(
-        xsp_num_cards_,                            // Number of XSPRESS cards
-        xsp_num_tf_,                               // Number of 4096 energy bin spectra timeframes
-        const_cast<char *>(xsp_base_IP_.c_str()),  // Base IP address
-        -1,                                        // Base port number override (-1 does not override)
-        xsp_max_channels_,                         // Set the maximum number of channels
-        xsp_debug_,                                // Enable debug messages
-        0                                          // Enable verbose debug messages
-      );
-    }
+    // Call the detector configure method
+    status = detector_->configure_mca(
+      xsp_num_cards_,                            // Number of XSPRESS cards
+      xsp_num_tf_,                               // Number of 4096 energy bin spectra timeframes
+      const_cast<char *>(xsp_base_IP_.c_str()),  // Base IP address
+      -1,                                        // Base port number override (-1 does not override)
+      xsp_max_channels_,                         // Set the maximum number of channels
+      xsp_debug_,                                // Enable debug messages
+      0                                          // Enable verbose debug messages
+    );
     if (status == XSP_STATUS_OK){
       // We have a valid handle to set the connected status
       LOG4CXX_INFO(logger_, "Connected to Xspress");
@@ -150,7 +154,7 @@ int XspressDetector::connect_list_mode()
   int status = XSP_STATUS_OK;
 
   // Call the detector configure method
-  status = detector_.configure_list(
+  status = detector_->configure_list(
     xsp_num_cards_,                            // Number of XSPRESS cards
     xsp_num_tf_,                               // Number of 4096 energy bin spectra timeframes
     const_cast<char *>(xsp_base_IP_.c_str()),  // Base IP address
@@ -181,7 +185,7 @@ int XspressDetector::disconnect()
   }
 
   if (checkConnected()){
-    status = detector_.close_connection();
+    status = detector_->close_connection();
     if (status == XSP_STATUS_OK){
       // We have disconnected from the detector
       LOG4CXX_INFO(logger_, "Disconnected from Xspress");
@@ -200,7 +204,7 @@ int XspressDetector::setupChannels()
 {
   int status = XSP_STATUS_OK;
   if (checkConnected()){
-    status = detector_.check_connected_channels(cards_connected_, channels_connected_);
+    status = detector_->check_connected_channels(cards_connected_, channels_connected_);
   } else {
     LOG4CXX_INFO(logger_, "Cannot set up channels as not connected");
   }
@@ -214,7 +218,7 @@ int XspressDetector::enableDAQ()
     if (xsp_daq_endpoints_.size() > 0){
       LOG4CXX_INFO(logger_, "XspressDetector creating DAQ object");
       // Create the DAQ object
-      daq_ = boost::shared_ptr<XspressDAQ>(new XspressDAQ(&detector_, xsp_max_channels_, xsp_max_spectra_, xsp_daq_endpoints_));
+      daq_ = boost::shared_ptr<XspressDAQ>(new XspressDAQ(detector_, xsp_max_channels_, xsp_max_spectra_, xsp_daq_endpoints_));
       // Setup DAQ object with num_aux_data
       daq_->set_num_aux_data(xsp_num_aux_data_);
     } else {
@@ -274,7 +278,7 @@ int XspressDetector::saveSettings()
     setErrorString("Cannot save settings, no config save path set");
     status = XSP_STATUS_ERROR;
   } else {
-    status = detector_.save_settings(xsp_config_save_path_);
+    status = detector_->save_settings(xsp_config_save_path_);
     if (status == XSP_STATUS_OK) {
       LOG4CXX_INFO(logger_, "Saved Configuration.");
     }
@@ -293,7 +297,7 @@ int XspressDetector::restoreSettings()
     setErrorString("Cannot restore settings, no config path set");
     status = XSP_STATUS_ERROR;
   } else {
-    status = detector_.restore_settings(xsp_config_path_);
+    status = detector_->restore_settings(xsp_config_path_);
     if (status == XSP_STATUS_OK){
       LOG4CXX_INFO(logger_, "Restored Xspress configuration");
     }
@@ -306,7 +310,7 @@ int XspressDetector::restoreSettings()
   }
 
   if (status == XSP_STATUS_OK){
-    status = detector_.setup_format_run_mode(list_mode, xsp_use_resgrades_, xsp_max_channels_, xsp_num_aux_data_);
+    status = detector_->setup_format_run_mode(list_mode, xsp_use_resgrades_, xsp_max_channels_, xsp_num_aux_data_);
     if (status == XSP_STATUS_OK){
       LOG4CXX_DEBUG_LEVEL(1, logger_, "xsp_num_aux_data set to " << xsp_num_aux_data_);
       // If the DAQ object exists then setup the aux_data value
@@ -315,15 +319,15 @@ int XspressDetector::restoreSettings()
         daq_->set_num_aux_data(xsp_num_aux_data_);
       }
     } else {
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
   // Apply run flags parameter
   if (status == XSP_STATUS_OK){
-    status = detector_.set_run_flags(xsp_run_flags_);
+    status = detector_->set_run_flags(xsp_run_flags_);
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
@@ -331,7 +335,7 @@ int XspressDetector::restoreSettings()
   if (status == XSP_STATUS_OK){
     status = readSCAParams();
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
@@ -339,23 +343,23 @@ int XspressDetector::restoreSettings()
   if (status == XSP_STATUS_OK){
     status = readDTCParams();
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
   // We ensure here that DTC energy is set between application restart and frame acquisition
   if (status == XSP_STATUS_OK){
-    status = detector_.set_dtc_energy(xsp_dtc_energy_);
+    status = detector_->set_dtc_energy(xsp_dtc_energy_);
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
   // Read the clock period
   if (status == XSP_STATUS_OK){
-    status = detector_.get_clock_period(xsp_clock_period_);
+    status = detector_->get_clock_period(xsp_clock_period_);
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
@@ -366,15 +370,15 @@ int XspressDetector::restoreSettings()
   if (status == XSP_STATUS_OK){
     status = setTriggerMode();
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
   // And finally trigger mux mode
   if (status == XSP_STATUS_OK){
-    status = detector_.set_trigger_input(list_mode);
+    status = detector_->set_trigger_input(list_mode);
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 
@@ -387,7 +391,7 @@ int XspressDetector::restoreSettings()
 int XspressDetector::readSCAParams()
 {
 
-  return detector_.read_sca_params(xsp_mca_channels_,
+  return detector_->read_sca_params(xsp_mca_channels_,
                                    xsp_chan_sca5_low_lim_,
                                    xsp_chan_sca5_high_lim_,
                                    xsp_chan_sca6_low_lim_,
@@ -402,18 +406,18 @@ void XspressDetector::readFemStatus()
 
   if (checkConnected()){
     // number of frames read out for each channel
-    status = detector_.read_frames(xsp_mca_channels_, xsp_status_frames_);
+    status = detector_->read_frames(xsp_mca_channels_, xsp_status_frames_);
     if (status != XSP_STATUS_OK){
       setErrorString("Cannot read frame counters");
     }
     // read dropped frames
-    status = detector_.read_dropped_frames(xsp_status_dropped_frames_);
+    status = detector_->read_dropped_frames(xsp_status_dropped_frames_);
     if (status != XSP_STATUS_OK){
       setErrorString("Cannot read dropped frame counters");
     }
 
     // read temperatures
-    status = detector_.read_temperatures(xsp_status_temperature_0_,
+    status = detector_->read_temperatures(xsp_status_temperature_0_,
                                          xsp_status_temperature_1_,
                                          xsp_status_temperature_2_,
                                          xsp_status_temperature_3_,
@@ -430,7 +434,7 @@ void XspressDetector::readFemStatus()
  */
 int XspressDetector::readDTCParams()
 {
-  return detector_.read_dtc_params(xsp_mca_channels_,
+  return detector_->read_dtc_params(xsp_mca_channels_,
                                    xsp_dtc_flags_,
                                    xsp_dtc_all_event_off_,
                                    xsp_dtc_all_event_grad_,
@@ -447,7 +451,7 @@ int XspressDetector::readDTCParams()
  */
 int XspressDetector::writeDTCParams()
 {
-  return detector_.write_dtc_params(xsp_mca_channels_,
+  return detector_->write_dtc_params(xsp_mca_channels_,
                                     xsp_dtc_flags_,
                                     xsp_dtc_all_event_off_,
                                     xsp_dtc_all_event_grad_,
@@ -461,7 +465,7 @@ int XspressDetector::writeDTCParams()
 
 int XspressDetector::setTriggerMode()
 {
-  return detector_.setTriggerMode(xsp_frames_,
+  return detector_->setTriggerMode(xsp_frames_,
                                   xsp_exposure_time_,
                                   xsp_clock_period_,
                                   xsp_trigger_mode_,
@@ -490,17 +494,17 @@ int XspressDetector::startAcquisition()
   if (status == XSP_STATUS_OK){
     // Arm the child cards to recieve TTL Veto signals.
     for (int card_n = 1; card_n < xsp_num_cards_; card_n++) {
-      status |= detector_.histogram_start(card_n);
+      status |= detector_->histogram_start(card_n);
     }
   }
 
   if (status == XSP_STATUS_OK){
     if (xsp_trigger_mode_ == TM_SOFTWARE){
       // Arm for soft trigger
-      status = detector_.histogram_arm(0);
+      status = detector_->histogram_arm(0);
     } else {
       // Start the detector
-      status = detector_.histogram_start(0);
+      status = detector_->histogram_start(0);
     }
   }
 
@@ -532,7 +536,7 @@ int XspressDetector::stopAcquisition()
         daq_->stopAcquisition();
       }
     }
-    status = detector_.histogram_stop(-1);
+    status = detector_->histogram_stop(-1);
   }
   return status;
 }
@@ -542,8 +546,8 @@ int XspressDetector::sendSoftwareTrigger()
   int status = XSP_STATUS_OK;
   if (acquiring_){
     if (xsp_trigger_mode_ == TM_SOFTWARE){
-      status = detector_.histogram_continue(0);
-      status |= detector_.histogram_pause(0);
+      status = detector_->histogram_continue(0);
+      status |= detector_->histogram_pause(0);
     } else {
       setErrorString("Cannot send software trigger, trigger_mode is not [software]");
       status = XSP_STATUS_ERROR;
@@ -810,9 +814,9 @@ void XspressDetector::setXspDTCEnergy(double energy)
   }
   // If we are connected then set the DTC energy
   if (checkConnected()){
-    status = detector_.set_dtc_energy(xsp_dtc_energy_);
+    status = detector_->set_dtc_energy(xsp_dtc_energy_);
     if (status != XSP_STATUS_OK){
-      setErrorString(detector_.getErrorString());
+      setErrorString(detector_->getErrorString());
     }
   }
 }
@@ -916,13 +920,13 @@ int XspressDetector::setSca5LowLimits(std::vector<uint32_t> sca5_low_limit)
     if (sca5_low_limit.size() == xsp_chan_sca5_low_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca5_low_limit.size(); chan++){
-        status |= detector_.set_window(chan, XSP_SCA5_LIM, sca5_low_limit[chan], xsp_chan_sca5_high_lim_[chan]);
+        status |= detector_->set_window(chan, XSP_SCA5_LIM, sca5_low_limit[chan], xsp_chan_sca5_high_lim_[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
       } else {
-        setErrorString(detector_.getErrorString());
+        setErrorString(detector_->getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -952,13 +956,13 @@ int XspressDetector::setSca5HighLimits(std::vector<uint32_t> sca5_high_limit)
     if (sca5_high_limit.size() == xsp_chan_sca5_high_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca5_high_limit.size(); chan++){
-        status |= detector_.set_window(chan, XSP_SCA5_LIM, xsp_chan_sca5_low_lim_[chan], sca5_high_limit[chan]);
+        status |= detector_->set_window(chan, XSP_SCA5_LIM, xsp_chan_sca5_low_lim_[chan], sca5_high_limit[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
       } else {
-        setErrorString(detector_.getErrorString());
+        setErrorString(detector_->getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -988,13 +992,13 @@ int XspressDetector::setSca6LowLimits(std::vector<uint32_t> sca6_low_limit)
     if (sca6_low_limit.size() == xsp_chan_sca6_low_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca6_low_limit.size(); chan++){
-        status |= detector_.set_window(chan, XSP_SCA6_LIM, sca6_low_limit[chan], xsp_chan_sca6_high_lim_[chan]);
+        status |= detector_->set_window(chan, XSP_SCA6_LIM, sca6_low_limit[chan], xsp_chan_sca6_high_lim_[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
       } else {
-        setErrorString(detector_.getErrorString());
+        setErrorString(detector_->getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -1024,13 +1028,13 @@ int XspressDetector::setSca6HighLimits(std::vector<uint32_t> sca6_high_limit)
     if (sca6_high_limit.size() == xsp_chan_sca6_high_lim_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca6_high_limit.size(); chan++){
-        status |= detector_.set_window(chan, XSP_SCA6_LIM, xsp_chan_sca6_low_lim_[chan], sca6_high_limit[chan]);
+        status |= detector_->set_window(chan, XSP_SCA6_LIM, xsp_chan_sca6_low_lim_[chan], sca6_high_limit[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
       } else {
-        setErrorString(detector_.getErrorString());
+        setErrorString(detector_->getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -1060,13 +1064,13 @@ int XspressDetector::setSca4Thresholds(std::vector<uint32_t> sca4_thresholds)
     if (sca4_thresholds.size() == xsp_chan_sca4_threshold_.size()){
       // Loop over the values calling the appropriate set window
       for (int chan = 0; chan < sca4_thresholds.size(); chan++){
-        status |= detector_.set_sca_thresh(chan, sca4_thresholds[chan]);
+        status |= detector_->set_sca_thresh(chan, sca4_thresholds[chan]);
       }
       // Once updated read back the limits from the detector
       if (status == XSP_STATUS_OK){
         status = this->readSCAParams();
       } else {
-        setErrorString(detector_.getErrorString());
+        setErrorString(detector_->getErrorString());
       }
     } else {
       std::stringstream ss;
@@ -1183,7 +1187,7 @@ bool XspressDetector::getXspAcquiring()
         // Check to see if the acquisition failed
         if (daq_->getAcqFailed()){
           // If the acquisition failed propagate the error
-          setErrorString("Acquisition Failed: " + detector_.getErrorString());
+          setErrorString("Acquisition Failed: " + detector_->getErrorString());
           acq_failed_ = true;
         }
       }

@@ -24,7 +24,7 @@ namespace Xspress
  * The constructor sets up logging used within the class, and initialises
  * variables and threads for processing data.
  */
-XspressDAQ::XspressDAQ(LibXspressWrapper *detector_ptr, 
+XspressDAQ::XspressDAQ(boost::shared_ptr<ILibXspress> detector_ptr, 
                        uint32_t num_channels,
                        uint32_t num_spectra,
                        std::vector<std::string> endpoints):

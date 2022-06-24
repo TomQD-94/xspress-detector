@@ -66,6 +66,8 @@ void parse_arguments(int argc, char** argv, po::variables_map& vm, LoggerPtr& lo
     config.add_options()
         ("debug-level,d",      po::value<unsigned int>()->default_value(debug_level),
            "Set the debug level")
+        ("simulation,s",      po::value<bool>()->default_value(false),
+           "Set true to simulate detector control")
         ("logconfig,l",   po::value<string>(),
            "Set the log4cxx logging configuration file")
         ("json_file,j",  po::value<std::string>()->default_value(""),
@@ -154,7 +156,7 @@ int main(int argc, char** argv)
     LOG4CXX_INFO(logger, "XspressController version " << XSPRESS_DETECTOR_VERSION_STR << " starting up");
 
     boost::shared_ptr<XspressController> xps;
-    xps = boost::shared_ptr<XspressController>(new XspressController());
+    xps = boost::shared_ptr<XspressController>(new XspressController(vm["simulation"].as<bool>()));
 
     // Configure the control channel for the XspressControl application
     OdinData::IpcMessage cfg;

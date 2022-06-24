@@ -19,6 +19,8 @@
 #include "logging.h"
 #include "xspress3.h"
 #include "LibXspressWrapper.h"
+#include "LibXspressSimulator.h"
+#include "ILibXspress.h"
 #include "XspressDAQ.h"
 
 using namespace log4cxx;
@@ -154,7 +156,7 @@ public:
   
 private:
   /** libxspress wrapper object */
-  LibXspressWrapper             detector_;
+  boost::shared_ptr<ILibXspress>  detector_;
   /** Pointer to DAQ object */
   boost::shared_ptr<XspressDAQ>   daq_;
   /** Simulation flag for this wrapper */

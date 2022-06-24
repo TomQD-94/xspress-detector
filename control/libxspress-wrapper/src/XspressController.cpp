@@ -116,7 +116,7 @@ const std::string XspressController::STATUS_TEMPERATURE[]             = {"temp_0
  * The constructor sets up logging used within the class, and starts the
  * IpcReactor thread.
  */
-XspressController::XspressController() :
+XspressController::XspressController(bool simulation) :
     logger_(log4cxx::Logger::getLogger("Xspress.XspressController")),
     runThread_(true),
     threadRunning_(false),
@@ -131,6 +131,8 @@ XspressController::XspressController() :
 {
   OdinData::configure_logging_mdc(OdinData::app_path.c_str());
   LOG4CXX_DEBUG_LEVEL(1, logger_, "Constructing XspressController");
+
+  xsp_ = boost::shared_ptr<XspressDetector>(new XspressDetector(simulation));
 
   // Wait for the thread service to initialise and be running properly, so that
   // this constructor only returns once the object is fully initialised (RAII).
@@ -259,8 +261,8 @@ void XspressController::handleCtrlChannel()
 void XspressController::provideStatus(OdinData::IpcMessage& reply)
 {
   // Check the acquisition failed state
-  if (xsp_.getXspAcqFailed()){
-    setError(xsp_.getErrorString());
+  if (xsp_->getXspAcqFailed()){
+    setError(xsp_->getErrorString());
   }
   // Return the current error status
   reply.set_param(XspressController::STATUS + "/" +
@@ -270,36 +272,36 @@ void XspressController::provideStatus(OdinData::IpcMessage& reply)
     XspressController::STATUS_STATE, state_);
   // Check if we are connected to the hardware
   reply.set_param(XspressController::STATUS + "/" +
-    XspressController::STATUS_CONNECTED, xsp_.checkConnected());
+    XspressController::STATUS_CONNECTED, xsp_->checkConnected());
   // Check if we need to perform a reconnection to the hardware
   reply.set_param(XspressController::STATUS + "/" +
-    XspressController::STATUS_RECONNECT_REQUIRED, xsp_.getReconnectStatus());
+    XspressController::STATUS_RECONNECT_REQUIRED, xsp_->getReconnectStatus());
   // Clients expect the acq complete status, which is the inverse of the acquiring method
   reply.set_param(XspressController::STATUS + "/" +
-    XspressController::STATUS_ACQ_COMPLETE, !xsp_.getXspAcquiring());
+    XspressController::STATUS_ACQ_COMPLETE, !xsp_->getXspAcquiring());
   // Number of frames read for current acquisition
   reply.set_param(XspressController::STATUS + "/" +
-    XspressController::STATUS_FRAMES, xsp_.getXspFramesRead());
+    XspressController::STATUS_FRAMES, xsp_->getXspFramesRead());
   // Number of channels connected per card
-  std::vector<int32_t> ch_con = xsp_.getChannelsConnected();
+  std::vector<int32_t> ch_con = xsp_->getChannelsConnected();
   for (int index = 0; index < ch_con.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_CHANNELS_CONNECTED + "[]", ch_con[index]);
   }
   // Cards connected status
-  std::vector<bool> cards_con = xsp_.getCardsConnected();
+  std::vector<bool> cards_con = xsp_->getCardsConnected();
   for (int index = 0; index < cards_con.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_CARDS_CONNECTED + "[]", (int32_t)cards_con[index]);
   }
   // Number of frames per FEM
-  std::vector<int32_t> ch_frames = xsp_.getXspFEMFramesRead();
+  std::vector<int32_t> ch_frames = xsp_->getXspFEMFramesRead();
   for (int index = 0; index < ch_frames.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_CHANNEL_FRAMES + "[]", ch_frames[index]);
   }
   // Number of dropped frames per FEM
-  std::vector<int32_t> dropped_frames = xsp_.getXspFEMDroppedFrames();
+  std::vector<int32_t> dropped_frames = xsp_->getXspFEMDroppedFrames();
   for (int index = 0; index < dropped_frames.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_FEM_DROPPED_FRAMES + "[]", dropped_frames[index]);
@@ -307,52 +309,52 @@ void XspressController::provideStatus(OdinData::IpcMessage& reply)
 
   // Live scalar values from latest MCA
   for (int sc_index = 0; sc_index < NUMBER_OF_SCALARS; sc_index++){
-    std::vector<uint32_t> live_scalars = xsp_.getLiveScalars(sc_index);
+    std::vector<uint32_t> live_scalars = xsp_->getLiveScalars(sc_index);
     for (int index = 0; index < live_scalars.size(); index++){
       reply.set_param(XspressController::STATUS + "/" +
                       XspressController::STATUS_LIVE_SCALAR[sc_index] + "[]", live_scalars[index]);
     }
   }
   // Live DTC factors from latest MCA
-  std::vector<double> live_dtc = xsp_.getLiveDtcFactors();
+  std::vector<double> live_dtc = xsp_->getLiveDtcFactors();
   for (int index = 0; index < live_dtc.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_LIVE_DTC + "[]", live_dtc[index]);
   }
   // Live input estimates from latest MCA
-  std::vector<double> live_inp_est = xsp_.getLiveInpEst();
+  std::vector<double> live_inp_est = xsp_->getLiveInpEst();
   for (int index = 0; index < live_inp_est.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_LIVE_INP_EST + "[]", live_inp_est[index]);
   }
 
   // Temperatures
-  std::vector<float> temp_0 = xsp_.getTemperature0();
+  std::vector<float> temp_0 = xsp_->getTemperature0();
   for (int index = 0; index < temp_0.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[0] + "[]", (double)temp_0[index]);
   }
-  std::vector<float> temp_1 = xsp_.getTemperature1();
+  std::vector<float> temp_1 = xsp_->getTemperature1();
   for (int index = 0; index < temp_1.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[1] + "[]", (double)temp_1[index]);
   }
-  std::vector<float> temp_2 = xsp_.getTemperature2();
+  std::vector<float> temp_2 = xsp_->getTemperature2();
   for (int index = 0; index < temp_2.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[2] + "[]", (double)temp_2[index]);
   }
-  std::vector<float> temp_3 = xsp_.getTemperature3();
+  std::vector<float> temp_3 = xsp_->getTemperature3();
   for (int index = 0; index < temp_3.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[3] + "[]", (double)temp_3[index]);
   }
-  std::vector<float> temp_4 = xsp_.getTemperature4();
+  std::vector<float> temp_4 = xsp_->getTemperature4();
   for (int index = 0; index < temp_4.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[4] + "[]", (double)temp_4[index]);
   }
-  std::vector<float> temp_5 = xsp_.getTemperature5();
+  std::vector<float> temp_5 = xsp_->getTemperature5();
   for (int index = 0; index < temp_5.size(); index++){
     reply.set_param(XspressController::STATUS + "/" +
                     XspressController::STATUS_TEMPERATURE[5] + "[]", (double)temp_5[index]);
@@ -407,7 +409,7 @@ void XspressController::configure(OdinData::IpcMessage& config, OdinData::IpcMes
   // First clear out any existing error message
   setError("");
   // Reset any failed acquisition error messages
-  xsp_.resetXspAcqFailed();
+  xsp_->resetXspAcqFailed();
 
   // Check to see if we are configuring this control application
   if (config.has_param(XspressController::CONFIG_APP)) {
@@ -471,126 +473,126 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
   if (config.has_param(XspressController::CONFIG_XSP_NUM_CARDS)){
     int num_cards = config.get_param<int>(XspressController::CONFIG_XSP_NUM_CARDS);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "num_cards set to  " << num_cards);
-    xsp_.setXspNumCards(num_cards);
+    xsp_->setXspNumCards(num_cards);
   }
 
   // Check for the number of 4096 energy bin spectra timeframes
   if (config.has_param(XspressController::CONFIG_XSP_NUM_TF)) {
     int num_tf = config.get_param<int>(XspressController::CONFIG_XSP_NUM_TF);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "num_tf set to  " << num_tf);
-    xsp_.setXspNumTf(num_tf);
+    xsp_->setXspNumTf(num_tf);
   }
 
   // Check for the base IP address of the Xspress detector
   if (config.has_param(XspressController::CONFIG_XSP_BASE_IP)) {
     std::string base_ip = config.get_param<std::string>(XspressController::CONFIG_XSP_BASE_IP);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "base_ip set to  " << base_ip);
-    xsp_.setXspBaseIP(base_ip);
+    xsp_->setXspBaseIP(base_ip);
   }
 
   // Check for the maximum number of channels available in the Xspress
   if (config.has_param(XspressController::CONFIG_XSP_MAX_CHANNELS)) {
     int max_channels = config.get_param<int>(XspressController::CONFIG_XSP_MAX_CHANNELS);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "max_channels set to  " << max_channels);
-    xsp_.setXspMaxChannels(max_channels);
+    xsp_->setXspMaxChannels(max_channels);
   }
 
   // Check for the maximum number of channels available in the Xspress
   if (config.has_param(XspressController::CONFIG_XSP_MCA_CHANNELS)) {
     int mca_channels = config.get_param<int>(XspressController::CONFIG_XSP_MCA_CHANNELS);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "mca_channels set to  " << mca_channels);
-    xsp_.setXspMcaChannels(mca_channels);
+    xsp_->setXspMcaChannels(mca_channels);
   }
 
   // Check for the maximum number of spectra available in the Xspress
   if (config.has_param(XspressController::CONFIG_XSP_MAX_SPECTRA)) {
     int max_spectra = config.get_param<int>(XspressController::CONFIG_XSP_MAX_SPECTRA);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "max_spectra set to  " << max_spectra);
-    xsp_.setXspMaxSpectra(max_spectra);
+    xsp_->setXspMaxSpectra(max_spectra);
   }
 
   // Check for the libxspress debug level
   if (config.has_param(XspressController::CONFIG_XSP_DEBUG)) {
     int debug = config.get_param<int>(XspressController::CONFIG_XSP_DEBUG);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "debug set to  " << debug);
-    xsp_.setXspDebug(debug);
+    xsp_->setXspDebug(debug);
   }
 
   // Check for the configuration path for loading configurations
   if (config.has_param(XspressController::CONFIG_XSP_CONFIG_PATH)) {
     std::string config_path = config.get_param<std::string>(XspressController::CONFIG_XSP_CONFIG_PATH);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "config_path set to  " << config_path);
-    xsp_.setXspConfigPath(config_path);
+    xsp_->setXspConfigPath(config_path);
   }
 
   // Check for the configuration path for saving configurations
   if (config.has_param(XspressController::CONFIG_XSP_CONFIG_SAVE_PATH)) {
     std::string config_save_path = config.get_param<std::string>(XspressController::CONFIG_XSP_CONFIG_SAVE_PATH);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "config_save_path set to  " << config_save_path);
-    xsp_.setXspConfigSavePath(config_save_path);
+    xsp_->setXspConfigSavePath(config_save_path);
   }
 
   // Check for use resgrades flag
   if (config.has_param(XspressController::CONFIG_XSP_USE_RESGRADES)) {
     bool use_resgrades = config.get_param<bool>(XspressController::CONFIG_XSP_USE_RESGRADES);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "use_resgrades set to  " << use_resgrades);
-    xsp_.setXspUseResgrades(use_resgrades);
+    xsp_->setXspUseResgrades(use_resgrades);
   }
 
   // Check for run flags parameter
   if (config.has_param(XspressController::CONFIG_XSP_RUN_FLAGS)) {
     int run_flags = config.get_param<int>(XspressController::CONFIG_XSP_RUN_FLAGS);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "run_flags set to  " << run_flags);
-    xsp_.setXspRunFlags(run_flags);
+    xsp_->setXspRunFlags(run_flags);
   }
 
   // Check for dead time correction energy parameter
   if (config.has_param(XspressController::CONFIG_XSP_DTC_ENERGY)) {
     double dtc_energy = config.get_param<double>(XspressController::CONFIG_XSP_DTC_ENERGY);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "dtc_energy set to  " << dtc_energy);
-    xsp_.setXspDTCEnergy(dtc_energy);
+    xsp_->setXspDTCEnergy(dtc_energy);
   }
 
   // Check for trigger mode parameter
   if (config.has_param(XspressController::CONFIG_XSP_TRIGGER_MODE)) {
     int trigger_mode = config.get_param<int>(XspressController::CONFIG_XSP_TRIGGER_MODE);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "trigger_mode set to  " << trigger_mode);
-    xsp_.setXspTriggerMode(trigger_mode);
+    xsp_->setXspTriggerMode(trigger_mode);
   }
 
   // Check for invert_f0 parameter
   if (config.has_param(XspressController::CONFIG_XSP_INVERT_F0)) {
     int invert_f0 = config.get_param<int>(XspressController::CONFIG_XSP_INVERT_F0);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "invert_f0 set to  " << invert_f0);
-    xsp_.setXspInvertF0(invert_f0);
+    xsp_->setXspInvertF0(invert_f0);
   }
 
   // Check for invert_veto parameter
   if (config.has_param(XspressController::CONFIG_XSP_INVERT_VETO)) {
     int invert_veto = config.get_param<int>(XspressController::CONFIG_XSP_INVERT_VETO);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "invert_veto set to  " << invert_veto);
-    xsp_.setXspInvertVeto(invert_veto);
+    xsp_->setXspInvertVeto(invert_veto);
   }
 
   // Check for debounce parameter
   if (config.has_param(XspressController::CONFIG_XSP_DEBOUNCE)) {
     int debounce = config.get_param<int>(XspressController::CONFIG_XSP_DEBOUNCE);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "debounce set to  " << debounce);
-    xsp_.setXspDebounce(debounce);
+    xsp_->setXspDebounce(debounce);
   }
 
   // Check for exposure time parameter
   if (config.has_param(XspressController::CONFIG_XSP_EXPOSURE_TIME)) {
     double exposure_time = config.get_param<double>(XspressController::CONFIG_XSP_EXPOSURE_TIME);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "exposure_time set to  " << exposure_time);
-    xsp_.setXspExposureTime(exposure_time);
+    xsp_->setXspExposureTime(exposure_time);
   }
 
   // Check for number of frames parameter
   if (config.has_param(XspressController::CONFIG_XSP_FRAMES)) {
     int frames = config.get_param<int>(XspressController::CONFIG_XSP_FRAMES);
     LOG4CXX_DEBUG_LEVEL(1, logger_, "frames set to  " << frames);
-    xsp_.setXspFrames(frames);
+    xsp_->setXspFrames(frames);
   }
 
   // Check for mode parameter
@@ -604,7 +606,7 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
       reply.set_param("error", ss.str());
     } else {
       LOG4CXX_DEBUG_LEVEL(1, logger_, "mode set to " << mode);
-      xsp_.setXspMode(mode);
+      xsp_->setXspMode(mode);
     }
   }
 
@@ -619,11 +621,11 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
       LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 5 low limit [" << i << "] = " << ival);
       sca5low.push_back(ival);
     }
-    status = xsp_.setSca5LowLimits(sca5low);
+    status = xsp_->setSca5LowLimits(sca5low);
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -638,11 +640,11 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
       LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 5 high limit [" << i << "] = " << ival);
       sca5high.push_back(ival);
     }
-    status = xsp_.setSca5HighLimits(sca5high);
+    status = xsp_->setSca5HighLimits(sca5high);
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -657,11 +659,11 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
       LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 6 low limit [" << i << "] = " << ival);
       sca6low.push_back(ival);
     }
-    status = xsp_.setSca6LowLimits(sca6low);
+    status = xsp_->setSca6LowLimits(sca6low);
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -676,11 +678,11 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
       LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 6 high limit [" << i << "] = " << ival);
       sca6high.push_back(ival);
     }
-    status = xsp_.setSca6HighLimits(sca6high);
+    status = xsp_->setSca6HighLimits(sca6high);
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -695,11 +697,11 @@ void XspressController::configureXsp(OdinData::IpcMessage& config, OdinData::Ipc
       LOG4CXX_DEBUG_LEVEL(0, logger_, "Setting Scalar 4 threshold [" << i << "] = " << ival);
       sca4t.push_back(ival);
     }
-    status = xsp_.setSca4Thresholds(sca4t);
+    status = xsp_->setSca4Thresholds(sca4t);
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -724,7 +726,7 @@ void XspressController::configureDAQ(OdinData::IpcMessage& config, OdinData::Ipc
       LOG4CXX_DEBUG_LEVEL(1, logger_, "Adding DAQ endpoint [" << sep << "]");
       eps.push_back(sep);
     }
-    xsp_.setXspDAQEndpoints(eps);
+    xsp_->setXspDAQEndpoints(eps);
   }
 
   // Check if DAQ is to be enabled
@@ -732,7 +734,7 @@ void XspressController::configureDAQ(OdinData::IpcMessage& config, OdinData::Ipc
     bool enable_daq = config.get_param<bool>(XspressController::CONFIG_DAQ_ENABLED);
     if (enable_daq){
       LOG4CXX_DEBUG_LEVEL(1, logger_, "Enable DAQ requested");
-      xsp_.enableDAQ();
+      xsp_->enableDAQ();
     }
   }
 }
@@ -749,29 +751,29 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
   if (config.has_param(XspressController::CONFIG_CMD_CONNECT)){
     LOG4CXX_DEBUG_LEVEL(1, logger_, "connect command executing");
     // Attempt connection to the hardware
-    int status = xsp_.connect();
+    int status = xsp_->connect();
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     } else {
       // Log the Xspress version
-      LOG4CXX_INFO(logger_, "Connected to Xspress version: " << xsp_.getVersionString());
+      LOG4CXX_INFO(logger_, "Connected to Xspress version: " << xsp_->getVersionString());
       // Attempt to restore the settings
-      status = xsp_.restoreSettings();
+      status = xsp_->restoreSettings();
     }
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     } else {
       // Check the connected channels and cards
-      status = xsp_.setupChannels();
+      status = xsp_->setupChannels();
     }
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -779,11 +781,11 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
   if (config.has_param(XspressController::CONFIG_CMD_DISCONNECT)){
     LOG4CXX_DEBUG_LEVEL(1, logger_, "disconnect command executing");
     // Attempt connection to the hardware
-    int status = xsp_.disconnect();
+    int status = xsp_->disconnect();
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -791,11 +793,11 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
   if (config.has_param(XspressController::CONFIG_CMD_START)){
     LOG4CXX_DEBUG_LEVEL(1, logger_, "start acquisition command executing");
     // Attempt to start an acquisition
-    int status = xsp_.startAcquisition();
+    int status = xsp_->startAcquisition();
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -803,11 +805,11 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
   if (config.has_param(XspressController::CONFIG_CMD_STOP)){
     LOG4CXX_DEBUG_LEVEL(1, logger_, "stop acquisition command executing");
     // Attempt to stop an acquisition
-    int status = xsp_.stopAcquisition();
+    int status = xsp_->stopAcquisition();
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 
@@ -815,11 +817,11 @@ void XspressController::configureCommand(OdinData::IpcMessage& config, OdinData:
   if (config.has_param(XspressController::CONFIG_CMD_TRIGGER)){
     LOG4CXX_DEBUG_LEVEL(1, logger_, "software trigger command executing");
     // Send a software trigger
-    int status = xsp_.sendSoftwareTrigger();
+    int status = xsp_->sendSoftwareTrigger();
     if (status != XSP_STATUS_OK){
       // Command failed, return error with any error string
-      reply.set_nack(xsp_.getErrorString());
-      setError(xsp_.getErrorString());
+      reply.set_nack(xsp_->getErrorString());
+      setError(xsp_->getErrorString());
     }
   }
 }
@@ -843,124 +845,124 @@ void XspressController::requestConfiguration(OdinData::IpcMessage& reply)
                   XspressController::CONFIG_APP_CTRL_ENDPOINT, ctrlChannelEndpoint_);
   // Add Xspress configuration parameter values to the reply
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_NUM_CARDS, xsp_.getXspNumCards());
+                  XspressController::CONFIG_XSP_NUM_CARDS, xsp_->getXspNumCards());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_NUM_TF, xsp_.getXspNumTf());
+                  XspressController::CONFIG_XSP_NUM_TF, xsp_->getXspNumTf());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_BASE_IP, xsp_.getXspBaseIP());
+                  XspressController::CONFIG_XSP_BASE_IP, xsp_->getXspBaseIP());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_MAX_CHANNELS, xsp_.getXspMaxChannels());
+                  XspressController::CONFIG_XSP_MAX_CHANNELS, xsp_->getXspMaxChannels());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_MCA_CHANNELS, xsp_.getXspMcaChannels());
+                  XspressController::CONFIG_XSP_MCA_CHANNELS, xsp_->getXspMcaChannels());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_MAX_SPECTRA, xsp_.getXspMaxSpectra());
+                  XspressController::CONFIG_XSP_MAX_SPECTRA, xsp_->getXspMaxSpectra());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_DEBUG, xsp_.getXspDebug());
+                  XspressController::CONFIG_XSP_DEBUG, xsp_->getXspDebug());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_CONFIG_PATH, xsp_.getXspConfigPath());
+                  XspressController::CONFIG_XSP_CONFIG_PATH, xsp_->getXspConfigPath());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_CONFIG_SAVE_PATH, xsp_.getXspConfigSavePath());
+                  XspressController::CONFIG_XSP_CONFIG_SAVE_PATH, xsp_->getXspConfigSavePath());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_USE_RESGRADES, xsp_.getXspUseResgrades());
+                  XspressController::CONFIG_XSP_USE_RESGRADES, xsp_->getXspUseResgrades());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_RUN_FLAGS, xsp_.getXspRunFlags());
+                  XspressController::CONFIG_XSP_RUN_FLAGS, xsp_->getXspRunFlags());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_DTC_ENERGY, xsp_.getXspDTCEnergy());
+                  XspressController::CONFIG_XSP_DTC_ENERGY, xsp_->getXspDTCEnergy());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_TRIGGER_MODE, xsp_.getXspTriggerMode());
+                  XspressController::CONFIG_XSP_TRIGGER_MODE, xsp_->getXspTriggerMode());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_INVERT_F0, xsp_.getXspInvertF0());
+                  XspressController::CONFIG_XSP_INVERT_F0, xsp_->getXspInvertF0());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_INVERT_VETO, xsp_.getXspInvertVeto());
+                  XspressController::CONFIG_XSP_INVERT_VETO, xsp_->getXspInvertVeto());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_DEBOUNCE, xsp_.getXspDebounce());
+                  XspressController::CONFIG_XSP_DEBOUNCE, xsp_->getXspDebounce());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_EXPOSURE_TIME, xsp_.getXspExposureTime());
+                  XspressController::CONFIG_XSP_EXPOSURE_TIME, xsp_->getXspExposureTime());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_FRAMES, xsp_.getXspFrames());
+                  XspressController::CONFIG_XSP_FRAMES, xsp_->getXspFrames());
   reply.set_param(XspressController::CONFIG_XSP + "/" +
-                  XspressController::CONFIG_XSP_MODE, xsp_.getXspMode());
+                  XspressController::CONFIG_XSP_MODE, xsp_->getXspMode());
 
-  std::vector<uint32_t> sca5ll = xsp_.getSca5LowLimits();
+  std::vector<uint32_t> sca5ll = xsp_->getSca5LowLimits();
   for (int index = 0; index < sca5ll.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_SCA5_LOW + "[]", sca5ll[index]);
   }
-  std::vector<uint32_t> sca5hl = xsp_.getSca5HighLimits();
+  std::vector<uint32_t> sca5hl = xsp_->getSca5HighLimits();
   for (int index = 0; index < sca5hl.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_SCA5_HIGH + "[]", sca5hl[index]);
   }
-  std::vector<uint32_t> sca6ll = xsp_.getSca6LowLimits();
+  std::vector<uint32_t> sca6ll = xsp_->getSca6LowLimits();
   for (int index = 0; index < sca6ll.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_SCA6_LOW + "[]", sca6ll[index]);
   }
-  std::vector<uint32_t> sca6hl = xsp_.getSca6HighLimits();
+  std::vector<uint32_t> sca6hl = xsp_->getSca6HighLimits();
   for (int index = 0; index < sca6hl.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_SCA6_HIGH + "[]", sca6hl[index]);
   }
-  std::vector<uint32_t> sca4t = xsp_.getSca4Thresholds();
+  std::vector<uint32_t> sca4t = xsp_->getSca4Thresholds();
   for (int index = 0; index < sca4t.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_SCA4_THRESH + "[]", sca4t[index]);
   }
-  std::vector<int> dtc_flags = xsp_.getDtcFlags();
+  std::vector<int> dtc_flags = xsp_->getDtcFlags();
   for (int index = 0; index < dtc_flags.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_FLAGS + "[]", dtc_flags[index]);
   }
 
-  std::vector<double> dtc_all_event_off = xsp_.getDtcAllEventOff();
+  std::vector<double> dtc_all_event_off = xsp_->getDtcAllEventOff();
   for (int index = 0; index < dtc_all_event_off.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_ALL_EVT_OFF + "[]", dtc_all_event_off[index]);
   }
 
-  std::vector<double> dtc_all_event_grad = xsp_.getDtcAllEventGrad();
+  std::vector<double> dtc_all_event_grad = xsp_->getDtcAllEventGrad();
   for (int index = 0; index < dtc_all_event_grad.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_ALL_EVT_GRAD + "[]", dtc_all_event_grad[index]);
   }
 
-  std::vector<double> dtc_all_event_rate_off = xsp_.getDtcAllEventRateOff();
+  std::vector<double> dtc_all_event_rate_off = xsp_->getDtcAllEventRateOff();
   for (int index = 0; index < dtc_all_event_rate_off.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_ALL_EVT_RATE_OFF + "[]", dtc_all_event_rate_off[index]);
   }
 
-  std::vector<double> dtc_all_event_rate_grad = xsp_.getDtcAllEventRateGrad();
+  std::vector<double> dtc_all_event_rate_grad = xsp_->getDtcAllEventRateGrad();
   for (int index = 0; index < dtc_all_event_rate_grad.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_ALL_EVT_RATE_GRAD + "[]", dtc_all_event_rate_grad[index]);
   }
 
-  std::vector<double> dtc_in_window_off = xsp_.getDtcInWindowOff();
+  std::vector<double> dtc_in_window_off = xsp_->getDtcInWindowOff();
   for (int index = 0; index < dtc_in_window_off.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_IN_WIN_OFF + "[]", dtc_in_window_off[index]);
   }
 
-  std::vector<double> dtc_in_window_grad = xsp_.getDtcInWindowGrad();
+  std::vector<double> dtc_in_window_grad = xsp_->getDtcInWindowGrad();
   for (int index = 0; index < dtc_in_window_grad.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_IN_WIN_GRAD + "[]", dtc_in_window_grad[index]);
   }
 
-  std::vector<double> dtc_in_window_rate_off = xsp_.getDtcInWindowRateOff();
+  std::vector<double> dtc_in_window_rate_off = xsp_->getDtcInWindowRateOff();
   for (int index = 0; index < dtc_in_window_rate_off.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_IN_WIN_RATE_OFF + "[]", dtc_in_window_rate_off[index]);
   }
 
-  std::vector<double> dtc_in_window_rate_grad = xsp_.getDtcInWindowRateGrad();
+  std::vector<double> dtc_in_window_rate_grad = xsp_->getDtcInWindowRateGrad();
   for (int index = 0; index < dtc_in_window_rate_grad.size(); index++){
     reply.set_param(XspressController::CONFIG_XSP + "/" +
                     XspressController::CONFIG_XSP_DTC_IN_WIN_RATE_GRAD + "[]", dtc_in_window_rate_grad[index]);
   }
 
-  std::vector<std::string> eps = xsp_.getXspDAQEndpoints();
+  std::vector<std::string> eps = xsp_->getXspDAQEndpoints();
   for (int index = 0; index < eps.size(); index++){
     reply.set_param(XspressController::CONFIG_DAQ + "/" +
                     XspressController::CONFIG_DAQ_ZMQ_ENDPOINTS + "[]", eps[index]);
@@ -1099,7 +1101,7 @@ void XspressController::tickTimer(void)
     reactor_->stop();
   } else {
     // We will read the FEM status in this timer execution
-    xsp_.readFemStatus();
+    xsp_->readFemStatus();
   }
 }
 

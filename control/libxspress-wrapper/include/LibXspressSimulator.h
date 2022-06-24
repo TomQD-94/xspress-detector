@@ -1,12 +1,12 @@
 /*
- * LibXspressWrapper.h
+ * LibXspressSimulator.h
  *
  *  Created on: 22 Sep 2021
  *      Author: Diamond Light Source
  */
 
-#ifndef LibXspressWrapper_H_
-#define LibXspressWrapper_H_
+#ifndef LibXspressSimulator_H_
+#define LibXspressSimulator_H_
 
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
@@ -17,48 +17,11 @@
 #include <log4cxx/helpers/exception.h>
 
 #include "logging.h"
-#include "xspress3.h"
 #include "ILibXspress.h"
 
 using namespace log4cxx;
 using namespace log4cxx::helpers;
 
-#define XSP_STATUS_OK     0
-#define XSP_STATUS_ERROR -1
-
-#define XSP3_NUM_DTC_FLOAT_PARAMS           8
-#define XSP3_NUM_DTC_INT_PARAMS             1
-#define XSP3_DTC_FLAGS                      0
-#define XSP3_DTC_AEO                        0
-#define XSP3_DTC_AEG                        1
-#define XSP3_DTC_AERO                       2
-#define XSP3_DTC_AERG                       3
-#define XSP3_DTC_IWO                        4
-#define XSP3_DTC_IWG                        5
-#define XSP3_DTC_IWRO                       6
-#define XSP3_DTC_IWRG                       7
-
-// Trigger mode enum valeus
-#define TM_SOFTWARE                         0
-#define TM_TTL_RISING_EDGE                  1
-#define TM_BURST                            2
-#define TM_TTL_VETO_ONLY                    3
-#define TM_SOFTWARE_START_STOP              4
-#define TM_IDC                              5
-#define TM_TTL_BOTH                         6
-#define TM_LVDS_VETO_ONLY                   7
-#define TM_LVDS_BOTH                        8
-
-// Trigger mode strings values
-#define TM_SOFTWARE_STR                     "software"
-#define TM_TTL_RISING_EDGE_STR              "ttl_rising"
-#define TM_BURST_STR                        "burst"
-#define TM_TTL_VETO_ONLY_STR                "ttl_veto_only"
-#define TM_SOFTWARE_START_STOP_STR          "software_start_stop"
-#define TM_IDC_STR                          "idc"
-#define TM_TTL_BOTH_STR                     "ttl_both"
-#define TM_LVDS_VETO_ONLY_STR               "lvds_veto_only"
-#define TM_LVDS_BOTH_STR                    "lvds_both"
 
 namespace Xspress
 {
@@ -68,12 +31,13 @@ namespace Xspress
  * libxspress library.  This class is designed to abstract specific libxspress
  * calls.
  */
-class LibXspressWrapper : public ILibXspress
+class LibXspressSimulator : public ILibXspress
 {
 public:
-  LibXspressWrapper();
-  virtual ~LibXspressWrapper();
-  std::string getVersionString();
+  LibXspressSimulator();
+  virtual ~LibXspressSimulator();
+    std::string getVersionString();
+
   void checkErrorCode(const std::string& prefix, int code);
   void checkErrorCode(const std::string& prefix, int code, bool add_xsp_error);
 
@@ -191,19 +155,27 @@ public:
   int set_sca_thresh(int chan, int value);
   int set_trigger_input(bool list_mode);
 
-  static const int runFlag_MCA_SPECTRA_;
-  static const int runFlag_SCALERS_ONLY_;
-  static const int runFlag_PLAYB_MCA_SPECTRA_;
-
-
 private:
-  /** Handle used by the libxspress library */
-  int                           xsp_handle_;
   /** String representation of trigger modes */
   std::map<std::string, int>    trigger_modes_;
 
+  /** Simulated storage variables */
+  int                           num_cards_;
+  int                           max_channels_;
+  bool                          use_resgrades_;
+  std::vector<uint32_t>         sca5_low_;
+  std::vector<uint32_t>         sca5_high_;
+  std::vector<uint32_t>         sca6_low_;
+  std::vector<uint32_t>         sca6_high_;
+  std::vector<uint32_t>         sca4_threshold_;
+  int32_t                       num_frames_;
+  int32_t                       max_frames_;
+  double                        exposure_time_;
+  bool                          acquisition_state_;
+  boost::posix_time::ptime      acq_start_time_;
+  uint32_t                      simulated_mca_[4096];
 };
 
 } /* namespace Xspress */
 
-#endif /* LibXspressWrapper_H_ */
+#endif /* LibXspressSimulator_H_ */
