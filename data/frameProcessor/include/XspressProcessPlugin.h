@@ -75,7 +75,7 @@ private:
         // Plugin interface
         void process_frame(boost::shared_ptr <Frame> frame);
 
-        void send_scalars(uint32_t num_scalars, uint32_t first_channel, uint32_t num_channels);
+        void send_scalars(uint32_t last_frame_id, uint32_t num_scalars, uint32_t first_channel, uint32_t num_channels);
 
         uint32_t num_frames_;
         uint32_t num_energy_bins_;

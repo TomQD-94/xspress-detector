@@ -365,7 +365,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
 
   // If the POST_TIME has elapsed or the maximum block of scalars has been reached then post them out
   if ((elapsed_time >= SCALAR_POST_TIME_MS) || (num_scalars_recorded_ == MAX_SCALAR_MEM_BLOCK_SIZE)){
-    send_scalars(header->num_scalars, header->first_channel, header->num_channels);
+    send_scalars(frame_id, header->num_scalars, header->first_channel, header->num_channels);
     last_scalar_send_time_ = now;
   }
 
@@ -418,7 +418,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
       if (frame_id == (num_frames_-1)){
         LOG4CXX_DEBUG_LEVEL(3, logger_, "num_frames_ - 1: " << (num_frames_-1));
         // As this is the last frame block to send, post the scalar buffer as well
-        send_scalars(header->num_scalars, header->first_channel, header->num_channels);
+        send_scalars(frame_id, header->num_scalars, header->first_channel, header->num_channels);
 
         dimensions_t mca_dims;
         mca_dims.push_back(header->num_aux);
@@ -443,11 +443,12 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   }
 }
 
-void XspressProcessPlugin::send_scalars(uint32_t num_scalars, uint32_t first_channel, uint32_t num_channels)
+void XspressProcessPlugin::send_scalars(uint32_t last_frame_id, uint32_t num_scalars, uint32_t first_channel, uint32_t num_channels)
 {
   uint32_t num_scalar_values = num_scalars * num_channels;
   uint32_t num_dtc_factors = num_channels;
   uint32_t num_inp_est = num_channels;
+  uint32_t frame_id = last_frame_id - num_scalars_recorded_ + 1;
 
   rapidjson::Document meta_document;
   meta_document.SetObject();
@@ -462,6 +463,11 @@ void XspressProcessPlugin::send_scalars(uint32_t num_scalars, uint32_t first_cha
   rapidjson::Value value_rank;
   value_rank.SetInt(concurrent_rank_);
   meta_document.AddMember(key_rank, value_rank, meta_document.GetAllocator());
+  // Add frame_id
+  rapidjson::Value key_frame_id("frame_id", meta_document.GetAllocator());
+  rapidjson::Value value_frame_id;
+  value_frame_id.SetInt(frame_id);
+  meta_document.AddMember(key_frame_id, value_frame_id, meta_document.GetAllocator());
   // Add number of data points
   rapidjson::Value key_qty("qty_scalars", meta_document.GetAllocator());
   rapidjson::Value value_qty;
