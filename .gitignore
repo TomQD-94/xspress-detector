@@ -8,7 +8,8 @@ build-dir/
 *.egg-info
 .idea/
 cmake-build-debug/
-*/CMakeFiles/*
+CMakeFiles
+Makefile
 
 node_modules
 /test
