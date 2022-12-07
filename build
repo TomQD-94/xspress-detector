@@ -17,21 +17,8 @@ build()
                        -DLOG4CXX_ROOT_DIR=${LOG4CXX_PREFIX} \
                        -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON \
                        -DCMAKE_INSTALL_PREFIX=${TARGET_PREFIX} \
-                       ${BUILD_SCRIPT_DIR}/data
+                       ${BUILD_SCRIPT_DIR}/cpp
     make VERBOSE=1 && make install
-
-    rm -rf ${BUILD_SCRIPT_DIR}/${BUILD_NAME}/*
-
-    
-    ${CMAKE_BIN}/cmake \
-                       -DBoost_NO_BOOST_CMAKE=ON \
-                       -DODINDATA_ROOT_DIR=${ODIN_DATA_PREFIX} \
-                       -DLOG4CXX_ROOT_DIR=${LOG4CXX_PREFIX} \
-                       -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON \
-                       -DCMAKE_INSTALL_PREFIX=${TARGET_PREFIX} \
-                       ${BUILD_SCRIPT_DIR}/control/libxspress-wrapper
-    make VERBOSE=1 && make install
-    
 
     # Build a wheel for separate release to DLS python3 area
     cd ${BUILD_SCRIPT_DIR}/control/xspress

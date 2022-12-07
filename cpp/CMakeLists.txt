@@ -17,6 +17,9 @@ set(FRAMERECEIVER_DIR ${xspressdetector_SOURCE_DIR}/frameReceiver)
 # Set the frameProcessor directory
 set(FRAMEPROCESSOR_DIR ${xspressdetector_SOURCE_DIR}/frameProcessor)
 
+# Set the libxspress wrapper directory
+set(XSPRESSWRAPPER_DIR ${xspressdetector_SOURCE_DIR}/xspressWrapper)
+
 # Appends the cmake/modules path inside the MAKE_MODULE_PATH variable which stores the
 # directories of additional CMake modules (ie. MacroOutOfSourceBuild.cmake):
 set(CMAKE_MODULE_PATH ${xspressdetector_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
@@ -38,6 +41,9 @@ add_subdirectory(${FRAMERECEIVER_DIR})
 
 # Add the frameReceiver subdirectory
 add_subdirectory(${FRAMEPROCESSOR_DIR})
+
+# Add the libxspress wrapper subdirectory
+add_subdirectory(${XSPRESSWRAPPER_DIR})
 
 message("Determining xspress-detector version")
 include(GetGitRevisionDescription)
