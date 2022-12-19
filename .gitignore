@@ -10,6 +10,7 @@ build-dir/
 cmake-build-debug/
 CMakeFiles
 Makefile
+venv
 
 node_modules
 /test
