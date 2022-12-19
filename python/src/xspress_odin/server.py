@@ -16,7 +16,7 @@ import tornado.ioloop
 
 from odin.http.server import HttpServer
 from odin.config.parser import ConfigParser, ConfigError
-from odin_data.logconfig import setup_logging, add_graylog_handler
+from odin_data.meta_writer.logconfig import setup_logging, add_graylog_handler
 
 
 def shutdown_handler():  # pragma: no cover
@@ -43,6 +43,8 @@ def main(argv=None):
     config.define('access_logging', default=None, option_help="Set the tornado access log level",
                   metavar="debug|info|warning|error|none")
     config.define('static_path', default='./static', option_help='Set path for static file content')
+    config.define('enable_cors', default=False, option_help='Enable cross-origin resource sharing')
+    config.define('cors_origin', default='', option_help='Cross-origin resource sharing URL')
 
     # Xspress specific configuration options
     config.define('logserver', default=None, option_help="Graylog server address and :port")
@@ -79,8 +81,7 @@ def main(argv=None):
     logging.info('Launching Xspress ODIN instance')
 
     # Launch the HTTP server
-    http_server = HttpServer(config.debug_mode, config.access_logging,
-                             config.static_path, adapters)
+    http_server = HttpServer(config)
     http_server.listen(config.http_port, config.http_addr)
 
     logging.info('HTTP server listening on %s:%s', config.http_addr, config.http_port)
