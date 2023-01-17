@@ -14,7 +14,7 @@ wheel:
     - cd ${CI_PROJECT_DIR}/python/
     - pip install build 'pipenv==2021.5.29'
     - python -m build --wheel --outdir dist/
-    - python -m pipenv --python 3.7 lock -v --pypi-mirror https://pypiserver.diamond.ac.uk && cp Pipfile.lock dist/
+    - python -m pipenv --python 3.7 lock -v --pypi-mirror https://pypiserver.diamond.ac.uk && mv Pipfile.lock dist/
   artifacts:
     paths:
       - python/dist/
