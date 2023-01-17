@@ -1,6 +1,6 @@
 """Implementation of Xspress Meta Writer
 
-This module is a subclass of the odin_data MetaWriter and handles Xspress 
+This module is a subclass of the odin_data MetaWriter and handles Xspress
 specific meta messages, writing them to disk.
 
 Alan Greer, Diamond Light Source
@@ -19,7 +19,7 @@ from odin_data.meta_writer.hdf5dataset import (
     StringHDF5Dataset,
 )
 from odin_data.util import construct_version_dict
-from . import _version as versioneer
+from ...odin_data.meta_writer import _version as versioneer
 
 # Data message types
 XSPRESS_SCALARS = "xspress_scalars"
@@ -100,7 +100,7 @@ class XspressMetaWriter(MetaWriter):
         format_str = '{}i'.format(header['qty_scalars']*header['number_of_frames'])
         array = struct.unpack(format_str, _data)
 
-        # Number of channels 
+        # Number of channels
         number_of_channels = header['number_of_channels']
         # Number of frames
         number_of_frames = header['number_of_frames']
@@ -116,7 +116,7 @@ class XspressMetaWriter(MetaWriter):
                 dataset_name = "{}{}".format(DATASET_SCALAR, channel+index)
                 for scalar_index in range(9):
                     self.add_scalar_value(current_frame_id, channel+index, scalar_index, scalars[scalar_index])
-            
+
         if (datetime.now() - self._flush_time).total_seconds() > 0.25:
             self._flush_datasets()
             self._flush_time = datetime.now()
@@ -146,7 +146,7 @@ class XspressMetaWriter(MetaWriter):
         self._logger.debug("{}".format(header))
         # Extract the channel number from the header
         channel = header['channel_index']
-        # Extract Number of channels 
+        # Extract Number of channels
         number_of_channels = header['number_of_channels']
         # Number of frames
         number_of_frames = header['number_of_frames']
@@ -184,7 +184,7 @@ class XspressMetaWriter(MetaWriter):
         self._logger.debug("{}".format(header))
         # Extract the channel number from the header
         channel = header['channel_index']
-        # Extract Number of channels 
+        # Extract Number of channels
         number_of_channels = header['number_of_channels']
         # Number of frames
         number_of_frames = header['number_of_frames']

@@ -1,0 +1,2 @@
+include versioneer.py
+include src/xspress_detector/_version.py
