@@ -32,7 +32,7 @@
 
 message ("\nLooking for odinData headers and libraries")
 
-if (ODINDATA_ROOT_DIR) 
+if (ODINDATA_ROOT_DIR)
     message (STATUS "Root dir: ${ODINDATA_ROOT_DIR}")
 endif ()
 
@@ -44,12 +44,12 @@ ENDIF(PkgConfig_FOUND)
 
 set(ODINDATA_DEFINITIONS ${PC_ODINDATA_CFLAGS_OTHER})
 
-find_path(ODINDATA_INCLUDE_DIR 
+find_path(ODINDATA_INCLUDE_DIR
 	NAMES
 		ClassLoader.h
-    PATHS 
+    PATHS
 		${ODINDATA_ROOT_DIR}/include
-        ${PC_ODINDATA_INCLUDEDIR} 
+        ${PC_ODINDATA_INCLUDEDIR}
         ${PC_ODINDATA_INCLUDE_DIRS}
 )
 
@@ -58,26 +58,26 @@ find_path(FRAMERECEIVER_INCLUDE_DIR
 		FrameDecoder.h
 	PATHS
 		${ODINDATA_ROOT_DIR}/include/frameReceiver
-        ${PC_ODINDATA_INCLUDEDIR} 
+        ${PC_ODINDATA_INCLUDEDIR}
         ${PC_ODINDATA_INCLUDE_DIRS}
 )
-		
+
 find_path(FRAMEPROCESSOR_INCLUDE_DIR
 	NAMES
 		DataBlock.h
 	PATHS
 		${ODINDATA_ROOT_DIR}/include/frameProcessor
-        ${PC_ODINDATA_INCLUDEDIR} 
+        ${PC_ODINDATA_INCLUDEDIR}
         ${PC_ODINDATA_INCLUDE_DIRS}
 )
 
 find_library(ODINDATA_LIBRARY
-    NAMES 
+    NAMES
 		OdinData
-    PATHS 
-		${ODINDATA_ROOT_DIR}/lib 
-        ${PC_ODINDATA_LIBDIR} 
-        ${PC_ODINDATA_LIBRARY_DIRS}         
+    PATHS
+		${ODINDATA_ROOT_DIR}/lib
+        ${PC_ODINDATA_LIBDIR}
+        ${PC_ODINDATA_LIBRARY_DIRS}
 )
 
 find_library(FRAMEPROCESSOR_LIBRARY
@@ -88,14 +88,14 @@ find_library(FRAMEPROCESSOR_LIBRARY
 		${PC_ODINDATA_LIBDIR}
 		${PC_ODINDATA_LIBRARY_DIRS}
 )
-			 
+
 include(FindPackageHandleStandardArgs)
 
 # handle the QUIETLY and REQUIRED arguments and set ODINDATA_FOUND to TRUE
 # if all listed variables are TRUE
-find_package_handle_standard_args(ODINDATA 
+find_package_handle_standard_args(ODINDATA
 	DEFAULT_MSG
-    ODINDATA_LIBRARY 
+    ODINDATA_LIBRARY
 	ODINDATA_INCLUDE_DIR
 	FRAMERECEIVER_INCLUDE_DIR
 	FRAMEPROCESSOR_LIBRARY
@@ -107,12 +107,12 @@ mark_as_advanced(ODINDATA_INCLUDE_DIR FRAMERECEIVER_INCLUDE_DIR FRAMEPROCESSOR_I
 if (ODINDATA_FOUND)
 	set(ODINDATA_INCLUDE_DIRS ${ODINDATA_INCLUDE_DIR} ${FRAMERECEIVER_INCLUDE_DIR} ${FRAMEPROCESSOR_INCLUDE_DIR})
 	set(ODINDATA_LIBRARIES ${ODINDATA_LIBRARY} ${FRAMEPROCESSOR_LIBRARY})
-	
+
     get_filename_component(ODINDATA_LIBRARY_DIR ${ODINDATA_LIBRARY} PATH)
     get_filename_component(ODINDATA_LIBRARY_NAME ${ODINDATA_LIBRARY} NAME_WE)
-    
+
     mark_as_advanced(ODINDATA_LIBRARY_DIR ODINDATA_LIBRARY_NAME)
 
-	message (STATUS "Include directories: ${ODINDATA_INCLUDE_DIRS}") 
-	message (STATUS "Libraries: ${ODINDATA_LIBRARIES}") 
+	message (STATUS "Include directories: ${ODINDATA_INCLUDE_DIRS}")
+	message (STATUS "Libraries: ${ODINDATA_LIBRARIES}")
 endif ()
