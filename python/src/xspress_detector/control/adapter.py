@@ -10,8 +10,7 @@ import re
 from tornado.escape import json_decode
 from odin.adapters.adapter import request_types, response_types, ApiAdapterResponse
 from odin.adapters.async_adapter import AsyncApiAdapter
-from xspress_odin.detector import XspressDetector, XspressDetectorException, XspressTriggerMode
-from odin_data.ipc_message import IpcMessage
+from xspress_detector.control.detector import XspressDetector
 
 from .debug import debug_method
 

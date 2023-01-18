@@ -4,7 +4,7 @@ import random
 import tornado
 import asyncio
 
-from odin_data.ipc_message import IpcMessage
+from odin_data.control.ipc_message import IpcMessage
 from zmq.eventloop.zmqstream import ZMQStream
 from zmq.utils.monitor import parse_monitor_message
 from zmq.utils.strtypes import unicode, cast_bytes, cast_unicode

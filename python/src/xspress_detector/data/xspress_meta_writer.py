@@ -6,20 +6,17 @@ specific meta messages, writing them to disk.
 Alan Greer, Diamond Light Source
 """
 
-import numpy as np
 import struct
 from datetime import datetime
 
-from odin_data.meta_writer.meta_writer import MetaWriter, FRAME
 from odin_data.meta_writer.hdf5dataset import (
+    Float64HDF5Dataset,
     Int32HDF5Dataset,
     Int64HDF5Dataset,
-    Float32HDF5Dataset,
-    Float64HDF5Dataset,
-    StringHDF5Dataset,
 )
+from odin_data.meta_writer.meta_writer import MetaWriter
 from odin_data.util import construct_version_dict
-from ...odin_data.meta_writer import _version as versioneer
+from xspress_detector._version import get_versions
 
 # Data message types
 XSPRESS_SCALARS = "xspress_scalars"
@@ -220,5 +217,5 @@ class XspressMetaWriter(MetaWriter):
     def get_version():
         return (
             "xspress-detector",
-            construct_version_dict(versioneer.get_versions()["version"]),
+            construct_version_dict(get_versions()["version"]),
         )

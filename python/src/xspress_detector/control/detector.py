@@ -12,7 +12,7 @@ from datetime import datetime
 from contextlib import suppress
 
 from odin.adapters.adapter import ApiAdapterRequest, ApiAdapter
-from odin_data.ipc_message import IpcMessage
+from odin_data.control.ipc_message import IpcMessage
 from odin.adapters.parameter_tree import ParameterTree, ParameterTreeError
 
 from .client import AsyncClient

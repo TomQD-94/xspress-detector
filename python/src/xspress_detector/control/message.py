@@ -6,8 +6,8 @@ import curses
 
 import os
 from abc import ABC, abstractmethod
-from odin_data.ipc_client import IpcClient
-from odin_data.ipc_message import IpcMessage
+from odin_data.control.ipc_client import IpcClient
+from odin_data.control.ipc_message import IpcMessage
 
 
 class XspressTriggerMode:

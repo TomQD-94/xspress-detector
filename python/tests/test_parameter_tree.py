@@ -1,7 +1,20 @@
 import pytest
+from xspress_detector.control.parameter_tree import (
+    GetSetValueParameter,
+    GetSetVirtualParameter,
+    GetVirtualParameter,
+    ListParameter,
+    NotPuttableParameterException,
+    NotSettableParameterException,
+    ParameterException,
+    PutVirtualParameter,
+    ValueParameter,
+    VirtualParameter,
+    XspressParameterTree,
+    bound_validator,
+    is_pos,
+)
 
-from xspress_odin.parameter_tree import NotPuttableParameterException, NotSettableParameterException, ParameterException, VirtualParameter, GetSetVirtualParameter, GetVirtualParameter, PutVirtualParameter, \
-    ValueParameter, GetSetValueParameter, ListParameter, XspressParameterTree, bound_validator, is_pos
 
 class CalledException(Exception):
     """We'll use this exception to verify that a callback has been called"""
@@ -33,7 +46,7 @@ async def test_put_virtual_parameter():
 @pytest.mark.asyncio
 async def test_int_value_parameter():
     param = ValueParameter(float, 0.0, put_cb=lambda: 0.0, validators=[bound_validator(0,10)])
-    assert 0.0 == param.get() 
+    assert 0.0 == param.get()
     param.set(1.1)
     assert 1.1 == param.get()
     with pytest.raises(ValueError):
@@ -68,7 +81,7 @@ async def test_list_value_parameter():
         await param.put(1)
 
 async def dummy_async_callback(x):
-    return 42 
+    return 42
 
 @pytest.mark.asyncio
 async def test_parameter_tree():
