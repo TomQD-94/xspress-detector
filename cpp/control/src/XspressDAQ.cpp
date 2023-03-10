@@ -426,18 +426,6 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
                 live_dtc_[c_index + channel_index] = dtc_ptr[c_index];
               }
               live_inp_est_[c_index + channel_index] = inp_est_ptr[c_index];
-              LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] DTC [" << channel_index+c_index << "] " << live_dtc_[c_index + channel_index]);
-              LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] Input estimate [" << channel_index+c_index << "] " << live_inp_est_[c_index + channel_index]);
-              LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] Scalers [" << channel_index+c_index << 
-                                  "] " << s_ptr[(c_index*9)+0] <<
-                                  " " << s_ptr[(c_index*9)+1] <<
-                                  " " << s_ptr[(c_index*9)+2] <<
-                                  " " << s_ptr[(c_index*9)+3] <<
-                                  " " << s_ptr[(c_index*9)+4] <<
-                                  " " << s_ptr[(c_index*9)+5] <<
-                                  " " << s_ptr[(c_index*9)+6] <<
-                                  " " << s_ptr[(c_index*9)+7] <<
-                                  " " << s_ptr[(c_index*9)+8]);
             }
           }
 

@@ -113,7 +113,8 @@ private:
 
         static const std::string CONFIG_DTC_FLAGS;
         static const std::string CONFIG_DTC_PARAMS;
-
+        
+        static const std::string CONFIG_CHUNK;
 
         /** Pointer to logger */
         LoggerPtr logger_;

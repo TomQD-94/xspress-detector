@@ -49,9 +49,12 @@ class FPXspressAdapter(FPCompressionAdapter):
         """
         logging.debug("FPXspressAdapter init called")
         self._xsp_adapter = None
-        self._xsp_adapter_name = "xsp"
+        self._xsp_adapter_name = "xspress"
+        self._num_channels = 0
+        self._num_process = 1
+        self._mca_per_client = 0
+        self._batch_size = 0
         super(FPXspressAdapter, self).__init__(**kwargs)
-
 
     def initialize(self, adapters):
         """Initialize the adapter after it has been loaded.
@@ -60,7 +63,15 @@ class FPXspressAdapter(FPCompressionAdapter):
         logging.info("Intercepting the Xspress control adapter")
         if self._xsp_adapter_name in adapters:
             self._xsp_adapter = adapters[self._xsp_adapter_name]
-            logging.info("FP adapter initiated connection to Xspress adapter: {}".format(self._xsp_adapter_name))
+            logging.info(
+                "FP adapter initiated connection to Xspress adapter: {}".format(
+                    self._xsp_adapter_name
+                )
+            )
+            self._num_channels = self._xsp_adapter.detector.mca_channels
+            self._num_process = self._xsp_adapter.detector.num_process_mca
+            self._mca_per_client = self._num_channels // self._num_process
+            self.data_datasets = ["mca_" + str(i) for i in range(self._num_channels)]
         else:
             logging.error("FP adapter could not connect to the Xspress adapter: {}".format(self._xsp_adapter_name))
         super(FPXspressAdapter, self).initialize(adapters)
@@ -68,11 +79,12 @@ class FPXspressAdapter(FPCompressionAdapter):
     @request_types('application/json', 'application/vnd.odin-native')
     @response_types('application/json', default='application/json')
     def put(self, path, request):  # pylint: disable=W0613
+        if path.startswith("config/hdf/dataset/data"):
+            self.configure_data_datasets(path,request)
         if path == self._command:
             # Check the mode we are running in (mca or list)
             mode = self._xsp_adapter.detector.mode
-
-            if mode == 'list':
+            if mode == "list":
                 num_clients = self._xsp_adapter.detector.num_process_list
                 write = bool_from_string(str(escape.url_unescape(request.body)))
                 if write:
@@ -142,28 +154,39 @@ class FPXspressAdapter(FPCompressionAdapter):
 
 
     def setup_rank(self):
-        # Attempt initialisation of the connected clients
         for client in self._clients:
+            # First send a message to XspressProcessPlugin, to update how many MCA are going send per batch.
             try:
-                # Setup the number of processes and the rank for each client
                 parameters = {
-                    'hdf': {
-                        'process': {
-                            'number': 1,
-                            'rank': 0
-                        }
+                    "hdf": {
+                        "process": {
+                            "number": 1,
+                            "rank": 0,
+                        },
                     },
-                    'xspress': {
-                        'frames': self._param['config/hdf/frames'],
-                        'acq_id': self._param['config/hdf/acquisition_id']
+                    "xspress": {
+                        "frames": self._param["config/hdf/frames"],
+                        "acq_id": self._param["config/hdf/acquisition_id"],
+                        "chunks": int(self._batch_size),
                     },
-                    'xspress-list': {
-                        'reset': True
-                    }
+                    "xspress-list": {"reset": True},
                 }
-                logging.debug("Sending: {}".format(parameters))
-
+                logging.warning("Sending: {}".format(parameters))
                 client.send_configuration(parameters)
             except Exception as err:
                 logging.debug(OdinDataAdapter.ERROR_FAILED_TO_SEND)
                 logging.error("Error: %s", err)
+
+    def configure_data_datasets(self, path, request):
+        if "chunks" in str(escape.url_unescape(request.body)):
+            value = json_decode(request.body)
+            self._batch_size = value["chunks"][0]
+        for client in range(self._num_process):
+            for dataset in self.data_datasets[
+                client * self._mca_per_client : (client + 1) * self._mca_per_client
+            ]:
+                dataset_path = path.replace(
+                    "config/hdf/dataset/data",
+                    "config/hdf/dataset/{}".format(dataset) + "/{}".format(client),
+                )
+                super(FPCompressionAdapter.__base__, self).put(dataset_path, request)

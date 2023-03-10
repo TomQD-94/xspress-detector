@@ -32,7 +32,7 @@ using namespace log4cxx::helpers;
 #define XSP_SCA5_LIM 0
 #define XSP_SCA6_LIM 1
 
-#define DEFAULT_MAX_CHANNELS 36
+#define DEFAULT_MAX_CHANNELS 8
 
 namespace Xspress
 {

@@ -1179,11 +1179,6 @@ int LibXspressWrapper::set_trigger_input(bool list_mode)
     }
   }
 
-  xsp_status = xsp3_set_glob_trigger_select(xsp_handle_, 0, &trig_mux);
-  if (xsp_status != XSP3_OK) {
-    checkErrorCode("xsp3_set_glob_trigger_select", xsp_status, true);
-    status = XSP_STATUS_ERROR;
-  }
   return status;
 }
 

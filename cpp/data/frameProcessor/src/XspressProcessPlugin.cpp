@@ -2,16 +2,16 @@
 // Created by hir12111 on 03/11/18.
 //
 #include <iostream>
+#include <string>
 #include "DataBlockFrame.h"
 #include "XspressProcessPlugin.h"
 #include "FrameProcessorDefinitions.h"
 #include "XspressDefinitions.h"
 #include "DebugLevelLogger.h"
 
-
-#define MAX_SCALAR_MEM_BLOCK_SIZE 1000
+#define MAX_SCALAR_MEM_BLOCK_SIZE 4096
 #define DEFAULT_SCALAR_QTY 9
-#define SCALAR_POST_TIME_MS 50
+#define SCALAR_POST_TIME_MS 1000
 
 namespace FrameProcessor {
 
@@ -27,6 +27,13 @@ const std::string XspressProcessPlugin::CONFIG_FRAMES               = "frames";
 const std::string XspressProcessPlugin::CONFIG_DTC_FLAGS            = "dtc/flags";
 const std::string XspressProcessPlugin::CONFIG_DTC_PARAMS           = "dtc/params";
 
+const std::string XspressProcessPlugin::CONFIG_CHUNK                = "chunks";
+
+const std::string META_NAME = "xspress";
+const std::string META_XSPRESS_CHUNK = "xspress_meta_chunk";
+const std::string META_XSPRESS_SCALARS = "xspress_scalars";
+const std::string META_XSPRESS_DTC = "xspress_dtc";
+const std::string META_XSPRESS_INP_EST = "xspress_inp_est";
 
 XspressMemoryBlock::XspressMemoryBlock() :
   ptr_(0),
@@ -116,12 +123,12 @@ char *XspressMemoryBlock::get_data_ptr()
   return ptr_;
 }
 
-
 XspressProcessPlugin::XspressProcessPlugin() :
   num_frames_(1),
   num_energy_bins_(4096),
+  num_aux_(0),
   num_channels_(0),
-  frames_per_block_(256),
+  frames_per_block_(1),
   current_block_start_(0),
   concurrent_processes_(1),
   concurrent_rank_(0),
@@ -143,7 +150,7 @@ XspressProcessPlugin::~XspressProcessPlugin()
   LOG4CXX_TRACE(logger_, "XspressProcessPlugin destructor.");
 }
 
-void XspressProcessPlugin::configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply) 
+void XspressProcessPlugin::configure(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
 {
   if (config.has_param(XspressProcessPlugin::CONFIG_FRAMES)){
     num_frames_ = config.get_param<unsigned int>(XspressProcessPlugin::CONFIG_FRAMES);
@@ -162,6 +169,60 @@ void XspressProcessPlugin::configure(OdinData::IpcMessage& config, OdinData::Ipc
     LOG4CXX_INFO(logger_, "Acquisition ID set to " << this->acq_id_);
   }
 
+  /**
+   *  If we receive the configuration with a chunk size different from the previous value we have to relocate the memory buffer
+   */
+  if (config.has_param(XspressProcessPlugin::CONFIG_CHUNK)){
+    if (this->frames_per_block_ != config.get_param<uint32_t>(XspressProcessPlugin::CONFIG_CHUNK))
+    {
+      if (config.get_param<uint32_t>(XspressProcessPlugin::CONFIG_CHUNK) > MAX_SCALAR_MEM_BLOCK_SIZE)
+      {
+        this->frames_per_block_ = 4096;
+        LOG4CXX_WARN(logger_, "Batch size configured to a value grater than the maximum allowed. Forcing it to " << MAX_SCALAR_MEM_BLOCK_SIZE);
+      }
+      else
+      {
+        this->frames_per_block_ = config.get_param<uint32_t>(XspressProcessPlugin::CONFIG_CHUNK);
+      }
+      LOG4CXX_INFO(logger_, "Number of frames per block changed from the previous iteration.");
+      setup_memory_allocation();
+    }
+
+    rapidjson::Document meta_document;
+    meta_document.SetObject();
+    // Add Acquisition ID
+    rapidjson::Value key_acq_id("acqID", meta_document.GetAllocator());
+    rapidjson::Value value_acq_id;
+    value_acq_id.SetString(this->acq_id_.c_str(), this->acq_id_.size(), meta_document.GetAllocator());
+    meta_document.AddMember(key_acq_id, value_acq_id, meta_document.GetAllocator());
+    // Add rank
+    rapidjson::Value key_rank("rank", meta_document.GetAllocator());
+    rapidjson::Value value_rank;
+    value_rank.SetInt(this->concurrent_rank_);
+    meta_document.AddMember(key_rank, value_rank, meta_document.GetAllocator());
+    // Add frame_id
+    rapidjson::Value key_frame_id("frame_id", meta_document.GetAllocator());
+    rapidjson::Value value_frame_id;
+    value_frame_id.SetInt(-1);
+    meta_document.AddMember(key_frame_id, value_frame_id, meta_document.GetAllocator());
+    // Add num_frames_
+    rapidjson::Value key_num_frames("num_frames_", meta_document.GetAllocator());
+    rapidjson::Value value_num_frames;
+    value_num_frames.SetInt(num_frames_);
+    meta_document.AddMember(key_num_frames, value_num_frames, meta_document.GetAllocator());
+
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    meta_document.Accept(writer);
+
+    this->publish_meta(META_NAME,
+                        META_XSPRESS_CHUNK,
+                        boost::to_string(this->frames_per_block_),
+                        buffer.GetString());
+
+    LOG4CXX_INFO(logger_, "Number of frames per block set to " << this->frames_per_block_);
+  }
+
   // Check for the live view plugin name
   if (config.has_param(XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME)) {
     this->live_view_name_ = config.get_param<std::string>(XspressProcessPlugin::CONFIG_LIVE_VIEW_NAME);
@@ -173,6 +234,7 @@ void XspressProcessPlugin::requestConfiguration(OdinData::IpcMessage& reply)
 {
   // Return the configuration of the LATRD process plugin
   reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_FRAMES, this->num_frames_);
+  reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_CHUNK, this->frames_per_block_);
   reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_PROCESS + "/" +
                   XspressProcessPlugin::CONFIG_PROCESS_NUMBER, this->concurrent_processes_);
   reply.set_param(get_name() + "/" + XspressProcessPlugin::CONFIG_PROCESS + "/" +
@@ -192,7 +254,7 @@ void XspressProcessPlugin::requestConfiguration(OdinData::IpcMessage& reply)
  * \param[in] config - IpcMessage containing configuration data.
  * \param[out] reply - Response IpcMessage.
  */
-void XspressProcessPlugin::configureProcess(OdinData::IpcMessage& config, OdinData::IpcMessage& reply)
+void XspressProcessPlugin::configureProcess(OdinData::IpcMessage &config, OdinData::IpcMessage &reply)
 {
   // Check for process number and rank number
   if (config.has_param(XspressProcessPlugin::CONFIG_PROCESS_NUMBER)) {
@@ -206,7 +268,7 @@ void XspressProcessPlugin::configureProcess(OdinData::IpcMessage& config, OdinDa
 }
 
 // Version functions
-int XspressProcessPlugin::get_version_major() 
+int XspressProcessPlugin::get_version_major()
 {
   return XSPRESS_DETECTOR_VERSION_MAJOR;
 }
@@ -253,6 +315,7 @@ void XspressProcessPlugin::setup_memory_allocation()
   // Allocate large enough blocks of memory to hold frames_per_block spectra
   // Allocate one block of memory for each channel
   uint32_t frame_size = num_energy_bins_ * num_aux_ * sizeof(uint32_t);
+  LOG4CXX_DEBUG_LEVEL(3, logger_, "frames_per_block_ inside the setup_memory_allocation method: " << frames_per_block_);
   for (int index = 0; index <= num_channels_; index++){
     boost::shared_ptr<XspressMemoryBlock> ptr = boost::shared_ptr<XspressMemoryBlock>(new XspressMemoryBlock());
     ptr->set_size(frame_size, frames_per_block_);
@@ -263,20 +326,20 @@ void XspressProcessPlugin::setup_memory_allocation()
   if (scalar_memblock_){
     free(scalar_memblock_);
   }
-  scalar_memblock_ = malloc(sizeof(uint32_t) * MAX_SCALAR_MEM_BLOCK_SIZE * num_channels_ * DEFAULT_SCALAR_QTY);
+  scalar_memblock_ = malloc(sizeof(uint32_t) * this->frames_per_block_ * num_channels_ * DEFAULT_SCALAR_QTY);
   if (dtc_memblock_){
     free(dtc_memblock_);
   }
-  dtc_memblock_ = malloc(sizeof(double) * MAX_SCALAR_MEM_BLOCK_SIZE * num_channels_);
+  dtc_memblock_ = malloc(sizeof(double) * this->frames_per_block_ * num_channels_);
   if (inp_est_memblock_){
     free(inp_est_memblock_);
   }
-  inp_est_memblock_ = malloc(sizeof(double) * MAX_SCALAR_MEM_BLOCK_SIZE * num_channels_);
+  inp_est_memblock_ = malloc(sizeof(double) * this->frames_per_block_ * num_channels_);
 }
 
-void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame) 
+void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
 {
-  char* frame_bytes = static_cast<char *>(frame->get_data_ptr());	
+  char* frame_bytes = static_cast<char *>(frame->get_data_ptr());
   FrameHeader *header = reinterpret_cast<FrameHeader *>(frame_bytes);
 
   // Check the frame number
@@ -310,7 +373,6 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
     set_number_of_aux(header->num_aux);
   }
 
-  
   // If the frame number is greater than the current memory allocation clear out the memory
   // and update the starting block
 
@@ -324,7 +386,7 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   uint32_t first_channel_index = header->first_channel;
 
   char *raw_sca_ptr = frame_bytes;
-  raw_sca_ptr += sizeof(FrameHeader); 
+  raw_sca_ptr += sizeof(FrameHeader);
   uint32_t *sca_ptr = (uint32_t *)raw_sca_ptr;
   char *raw_dtc_ptr = frame_bytes;
   raw_dtc_ptr += (sizeof(FrameHeader) + (num_scalar_values*sizeof(uint32_t)));
@@ -332,20 +394,6 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   char *raw_inp_est_ptr = frame_bytes;
   raw_inp_est_ptr += (sizeof(FrameHeader) + (num_scalar_values*sizeof(uint32_t)) + (num_dtc_factors*sizeof(double)));
   double *inp_est_ptr = (double *)raw_inp_est_ptr;
-
-  for (int cindex = 0; cindex < num_channels_; cindex++){
-    LOG4CXX_DEBUG_LEVEL(3, logger_, "DTC factor: " << dtc_ptr[cindex]);
-    LOG4CXX_DEBUG_LEVEL(3, logger_, "Input estimate: " << inp_est_ptr[cindex]);
-    LOG4CXX_DEBUG_LEVEL(3, logger_, "Scalers " << sca_ptr[0 + (cindex*9)] <<
-                           " " << sca_ptr[1 + (cindex*9)] <<
-                           " " << sca_ptr[2 + (cindex*9)] <<
-                           " " << sca_ptr[3 + (cindex*9)] <<
-                           " " << sca_ptr[4 + (cindex*9)] <<
-                           " " << sca_ptr[5 + (cindex*9)] <<
-                           " " << sca_ptr[6 + (cindex*9)] <<
-                           " " << sca_ptr[7 + (cindex*9)] <<
-                           " " << sca_ptr[8 + (cindex*9)]);
-  }
 
   // Memcpy the scalars into the correct memory location
   uint32_t *dest_ptr = (uint32_t *)scalar_memblock_;
@@ -363,16 +411,18 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
   int32_t elapsed_time = (now - last_scalar_send_time_).total_milliseconds();
 
-  // If the POST_TIME has elapsed or the maximum block of scalars has been reached then post them out
-  if ((elapsed_time >= SCALAR_POST_TIME_MS) || (num_scalars_recorded_ == MAX_SCALAR_MEM_BLOCK_SIZE)){
+  // Send scalars to be writen once we reach the desired number of frames.
+  // Number has to be the same as the number of MCA frames for live processing reasons
+  if ((num_scalars_recorded_ == this->frames_per_block_))
+  {
     send_scalars(frame_id, header->num_scalars, header->first_channel, header->num_channels);
     last_scalar_send_time_ = now;
   }
 
   char *mca_ptr = frame_bytes;
-  mca_ptr += (sizeof(FrameHeader) + 
-             (num_scalar_values*sizeof(uint32_t)) + 
-             (num_dtc_factors*sizeof(double)) + 
+  mca_ptr += (sizeof(FrameHeader) +
+             (num_scalar_values*sizeof(uint32_t)) +
+             (num_dtc_factors*sizeof(double)) +
              (num_inp_est*sizeof(double))
              );
 
@@ -388,35 +438,43 @@ void XspressProcessPlugin::process_frame(boost::shared_ptr <Frame> frame)
   live_frame->set_outer_chunk_size(1);
   // Push out the live MCA data to the live view plugin only
   this->push(live_view_name_, live_frame);
-
+  LOG4CXX_DEBUG_LEVEL(1, logger_, "FrameId = " << frame_id);
   for (int index = 0; index < num_channels_; index++){
     memory_ptrs_[index]->add_frame(frame_id, mca_ptr);
     mca_ptr += mca_size;
 
     // Check if the buffer is full
-    if (memory_ptrs_[index]->check_full()){
-        // Create the frame and push it
-        dimensions_t mca_dims;
-        mca_dims.push_back(header->num_aux);
-        mca_dims.push_back(header->num_energy_bins);
-        std::stringstream ss;
-        ss << "mca_" << index + first_channel_index;
-        // Calculate the ID of the frame we need to push
-        // This must be offset according to the rank and number of processes
-        uint32_t push_frame_id = ((frame_id / frames_per_block_) * concurrent_processes_) + concurrent_rank_;
-        FrameMetaData mca_metadata(push_frame_id, ss.str(), raw_32bit, "", mca_dims);
-        boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->size()));
-        memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->size());
-        // Set the chunking size
-        mca_frame->set_outer_chunk_size(frames_per_block_);
-        // Push out the MCA data
-        this->push(mca_frame);
-        // Reset the memory block
-        memory_ptrs_[index]->reset();
-    } else {
+    if (memory_ptrs_[index]->check_full())
+    {
+      if (frame_id == (num_frames_ - 1))
+      {
+        LOG4CXX_DEBUG_LEVEL(1, logger_, "Sending the metadata as the last frame when the queue is full");
+        send_scalars(frame_id, header->num_scalars, header->first_channel, header->num_channels);
+      }
+      // Create the frame and push it
+      dimensions_t mca_dims;
+      mca_dims.push_back(header->num_aux);
+      mca_dims.push_back(header->num_energy_bins);
+      std::stringstream ss;
+      ss << "mca_" << index + first_channel_index;
+      // Calculate the ID of the frame we need to push
+      // This must be offset according to the rank and number of processes
+      uint32_t push_frame_id = ((frame_id / frames_per_block_) * concurrent_processes_) + concurrent_rank_;
+      FrameMetaData mca_metadata(push_frame_id, ss.str(), raw_32bit, "", mca_dims);
+      boost::shared_ptr<Frame> mca_frame(new DataBlockFrame(mca_metadata, memory_ptrs_[index]->size()));
+      memcpy(mca_frame->get_data_ptr(), memory_ptrs_[index]->get_data_ptr(), memory_ptrs_[index]->size());
+      // Set the chunking size
+      mca_frame->set_outer_chunk_size(frames_per_block_);
+      // Push out the MCA data
+      this->push(mca_frame);
+      // Reset the memory block
+      memory_ptrs_[index]->reset();
+    }
+    else
+    {
       // Check if we are writing out the last block which is not full size
-      if (frame_id == (num_frames_-1)){
-        LOG4CXX_DEBUG_LEVEL(3, logger_, "num_frames_ - 1: " << (num_frames_-1));
+      if (frame_id == (num_frames_ - 1)){
+        LOG4CXX_DEBUG_LEVEL(1, logger_, "Sending the metadata as the last frame when the queue is not full");
         // As this is the last frame block to send, post the scalar buffer as well
         send_scalars(frame_id, header->num_scalars, header->first_channel, header->num_channels);
 
@@ -493,25 +551,24 @@ void XspressProcessPlugin::send_scalars(uint32_t last_frame_id, uint32_t num_sca
   meta_document.Accept(writer);
 
   LOG4CXX_DEBUG_LEVEL(3, logger_, "Publishing MCA scalars: " << buffer.GetString());
-  this->publish_meta("xspress",
-                      "xspress_scalars",
+  this->publish_meta(META_NAME,
+                      META_XSPRESS_SCALARS,
                       scalar_memblock_,
                       num_scalar_values * num_scalars_recorded_ * sizeof(uint32_t),
                       buffer.GetString());
 
-  this->publish_meta("xspress",
-                      "xspress_dtc",
+  this->publish_meta(META_NAME,
+                      META_XSPRESS_DTC,
                       dtc_memblock_,
                       num_dtc_factors * num_scalars_recorded_ * sizeof(double),
                       buffer.GetString());
 
-  this->publish_meta("xspress",
-                      "xspress_inp_est",
+  this->publish_meta(META_NAME,
+                      META_XSPRESS_INP_EST,
                       inp_est_memblock_,
                       num_inp_est * num_scalars_recorded_ * sizeof(double),
                       buffer.GetString());
 
   num_scalars_recorded_ = 0;
 }
-
 }
