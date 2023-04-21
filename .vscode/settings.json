@@ -1,42 +1,31 @@
 {
-    "files.associations": {
-        "deque": "cpp",
-        "list": "cpp",
-        "string": "cpp",
-        "unordered_map": "cpp",
-        "vector": "cpp",
-        "system_error": "cpp",
-        "*.ipp": "cpp"
+    "cmake.generator": "Unix Makefiles",
+    "cmake.sourceDirectory": "${workspaceFolder}/cpp",
+    "cmake.buildDirectory": "${workspaceFolder}/vscode_build",
+    "cmake.installPrefix": "${workspaceFolder}/vscode_prefix",
+    "cmake.configureArgs": [
+        "-DLOG4CXX_ROOT_DIR=/dls_sw/prod/tools/RHEL7-x86_64/log4cxx/0-10-0dls2/prefix",
+        "-DBLOSC_ROOT_DIR=/dls_sw/prod/tools/RHEL7-x86_64/c-blosc/1-14-2/prefix",
+        "-DHDF5_ROOT=/dls_sw/prod/tools/RHEL7-x86_64/hdf5/1-10-5/prefix",
+        "-DODINDATA_ROOT_DIR=${workspaceFolder:odin-data}/vscode_prefix"
+    ],
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "editor.formatOnSave": true,
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        },
+        "editor.defaultFormatter": "ms-python.python",
+        "editor.rulers": [
+            88
+        ]
     },
-    "workbench.colorCustomizations": {
-        "titleBar.activeBackground": "#ff9d34",
-        "statusBar.background" : "#ffdd8d",
-    },
-    "cmake.configureOnOpen": false,
-    "python.pythonPath": "/dls_sw/work/R3.14.12.7/support/xspress-odin/xspress-detector/control/xspress/.venvs/xspress-ZEYHa99R/bin/python",
-    "editor.tokenColorCustomizations": {
-        "[Solarized Light]": {
-            "textMateRules": [
-                {
-                    "name": "python class",
-                    "scope": [
-                        "entity.name.type",
-                        "entity.name.namespace",
-                        "entity.name.scope-resolution"
-                    ],
-                    "settings": {
-                        "foreground": "#2998b7"
-                    }
-                },
-                {
-                    "name": "python function",
-                    "scope": ["entity.name.function"],
-                    "settings":{
-                        "foreground": "#268bd2",
-                        "fontStyle": "italic"
-                    }
-                }
-            ]
-        }
-    }
+    "python.linting.flake8Args": [
+        "--max-line-length=88"
+    ],
+    "python.formatting.provider": "black",
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
 }
