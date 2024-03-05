@@ -42,7 +42,7 @@ def is_pos(value) -> None:
 
 def bound_validator(_min, _max) -> Callable[[float], None]:
     def validator(value):
-        if value <= _min or value >= _max:
+        if value < _min or value > _max:
             raise ValueError(f"Value must be between {_min} and {_max}. Value = {value} was given")
     return validator
 
@@ -103,12 +103,14 @@ def async_validate(func):
 
 
 class VirtualParameter:
-    def __init__(self, param_type, get_cb=None, set_cb=None, put_cb=None, validators: List[Callable]=None):
+    def __init__(self, param_type, get_cb=None, set_cb=None, put_cb=None, validators: List[Callable]=None, validate=True):
         self.param_type = param_type
         self.get_cb = get_cb
         self.set_cb = set_cb
         self.put_cb = put_cb
-        self.validators = [type_validator(param_type)] if validators is None else [type_validator(param_type)] + validators
+        self.validators = []
+        if validate:
+            self.validators = [type_validator(param_type)] if validators is None else [type_validator(param_type)] + validators
 
     @assert_gettable
     def get(self):
@@ -130,19 +132,19 @@ class VirtualParameter:
 
 
 
-class GetVirtualParameter(VirtualParameter):
+class ReadOnlyVirtualParameter(VirtualParameter):
     def __init__(self, param_type, get_cb):
         super().__init__(param_type, get_cb=get_cb)
 
 
-class GetSetVirtualParameter(VirtualParameter):
+class TransparentVirtualParameter(VirtualParameter):
     def __init__(self, param_type, get_cb, set_cb):
         super().__init__(param_type, get_cb=get_cb, set_cb=set_cb)
 
 
-class PutVirtualParameter(VirtualParameter):
-    def __init__(self, param_type, put_cb, validators=None):
-        super().__init__(param_type, put_cb=put_cb, validators=validators)
+class WriteOnlyVirtualParameter(VirtualParameter):
+    def __init__(self, param_type, put_cb, validators=None, validate=True):
+        super().__init__(param_type, put_cb=put_cb, validators=validators, validate=validate)
 
 
 class ValueParameter(VirtualParameter):
@@ -158,7 +160,7 @@ class ValueParameter(VirtualParameter):
         self.value = value
 
 
-class GetSetValueParameter(ValueParameter):
+class TransparentValueParameter(ValueParameter):
     def __init__(self, param_type, initial_value):
         super().__init__(param_type, initial_value)
 
@@ -189,9 +191,13 @@ class XspressParameterTree:
 
     def _unroll(self, tree: Union[dict, VirtualParameter]):
         if isinstance(tree, VirtualParameter):
+            if tree.get_cb is None:
+                return None
             return tree.get()
-        else:
+        elif isinstance(tree, dict):
             return {k: self._unroll(v) for k, v in tree.items()}
+        else:
+            raise ValueError(f"unexpected type in parameter tree! type '{type(tree)}' found.")
 
     def set(self, path, value):
         result = self._resolve_path(path)
@@ -209,7 +215,7 @@ class XspressParameterTree:
 
     async def put(self, path, value):
         tokens = split_path(path)
-        args = (value)
+        args = (value,)
         is_list = False
         if tokens[-1].isdigit():
             is_list = True
@@ -222,6 +228,8 @@ class XspressParameterTree:
             return await parameter.put(*args)
 
     def _resolve_path(self, path: str) -> Union[VirtualParameter, ListParameter, dict]:
+        if path == "":
+            return self.tree
         tokens = split_path(path)
         if tokens[-1].isdigit(): # disregard index if parameter is a ListParameter
             tokens = tokens[:-1]

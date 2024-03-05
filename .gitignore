@@ -1,6 +1,6 @@
 *~
 *.pyc
-prefix/
+*prefix/
 build_name*
 build-dir/
 *build/

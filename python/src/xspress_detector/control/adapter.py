@@ -36,10 +36,13 @@ class XspressAdapter(AsyncApiAdapter):
 
         self.detector = None
         try:
+            logging.info("[adapter class] self.options: {}".format(self.options))
             endpoint = self.options['endpoint']
             ip, port = endpoint.split(":")
-            self.detector = XspressDetector(ip, port)
-            logging.info(f"instatiated XspressDetector with ip = {ip} and port {port}")
+            num_process = int(self.options["num_process"])
+            num_process_list = max(2,num_process-1) if num_process >=2 else 1
+            self.detector = XspressDetector(ip, port, num_process_mca=num_process, num_process_list=num_process_list)
+            logging.info(f"instatiated XspressDetector with ip = {ip} and port {port}\n num_process/list = {num_process}/{num_process_list}")
 
             num_cards = int(self.options['num_cards'])
             num_tf = int(self.options["num_tf"])
@@ -82,11 +85,10 @@ class XspressAdapter(AsyncApiAdapter):
         logging.debug(f"XspressAdapter.get called with path: {path}")
         try:
             response = self.detector.get(path)
-            # transform singel value jsons form {"param_name": value} to {"value": value} to work with the ADOdin client
-            first_value = next(iter(response.values()))
-            if len(response) == 1 and not isinstance(first_value, dict):
-                response = {"value": first_value}
+            if not isinstance(response, dict):
+                response = {"value": response}
 
+            respose = "{}".format(response)
             status_code = 200
         except LookupError as e:
             response = {'invalid path': str(e)}
@@ -108,14 +110,9 @@ class XspressAdapter(AsyncApiAdapter):
         """
         logging.debug(debug_method())
         try:
-            # msg = IpcMessage("cmd", "configure")
-            # msg.set_param("config", {"max_channels": 10})
-            # resp = await self.detector.test_client.send_recv(msg)
             data = json_decode(request.body)
-            if "/" in path and path.split("/")[-1].isdigit():
-                response = await self.detector.put_array(path, data)
-            else:
-                response = await self.detector.put_single(path, data)
+            response = await self.detector.parameter_tree.put(path, data)
+            response = "{}".format(response)
             status_code = 200
         except ConnectionError as e:
             response = {'error': str(e)}

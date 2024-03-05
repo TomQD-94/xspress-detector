@@ -168,7 +168,7 @@ int LibXspressSimulator::setup_resgrades(bool use_resgrades, int max_channels, i
 
 int LibXspressSimulator::set_run_flags(int run_flags)
 {
-  LOG4CXX_DEBUG_LEVEL(1, logger_, "[SIM] Xspress wrapper calling xsp3_set_run_flags with " << run_flags);
+  LOG4CXX_INFO(logger_, "\n\n[SIM] Xspress wrapper calling xsp3_set_run_flags with " << run_flags << "\n\n");
   return XSP_STATUS_OK;
 }
 
@@ -223,15 +223,28 @@ int LibXspressSimulator::check_connected_channels(std::vector<bool>& cards_conne
     setErrorString("channels_connected vector has the incorrect dimension for the detector reported number of cards");
     status = XSP_STATUS_ERROR;
   } else {
-    for (int card = 0; card < num_cards_; card++) {
-      cards_connected[card] = true;
-      if (card < 3){
-        channels_connected[card] = 10;
-      } else {
-        channels_connected[card] = 6;
+    if(max_channels_ < 10)
+    {
+      int chan_per_card = int(max_channels_/num_cards_);
+      for (int card = 0; card < num_cards_; card++) {
+        cards_connected[card] = true;
+        channels_connected[card] = chan_per_card;
+        found_chans += channels_connected[card];
+        LOG4CXX_INFO(logger_, "[SIM] Card " << card << " connected with " << channels_connected[card] << " channels");
       }
-      found_chans += channels_connected[card];
-      LOG4CXX_INFO(logger_, "[SIM] Card " << card << " connected with " << channels_connected[card] << " channels");
+    }
+    else
+    {
+      for (int card = 0; card < num_cards_; card++) {
+        cards_connected[card] = true;
+        if (card == num_cards_ - 1){
+          channels_connected[card] = int(max_channels_ % 10);
+        } else {
+          channels_connected[card] = 10;
+        }
+        found_chans += channels_connected[card];
+        LOG4CXX_INFO(logger_, "[SIM] Card " << card << " connected with " << channels_connected[card] << " channels");
+      }
     }
   }
   return status;
@@ -240,7 +253,7 @@ int LibXspressSimulator::check_connected_channels(std::vector<bool>& cards_conne
 int LibXspressSimulator::read_frames(int max_channels, std::vector<int32_t>& frame_counters)
 {
   int status = XSP_STATUS_OK;
-  LOG4CXX_DEBUG_LEVEL(0, logger_, "[SIM] Xspress wrapper calling xsp3_resolve_path and using Xsp3Sys[].histogram[].cur_tf_ext");
+  LOG4CXX_DEBUG_LEVEL(3, logger_, "[SIM] Xspress wrapper calling xsp3_resolve_path and using Xsp3Sys[].histogram[].cur_tf_ext");
 
   if (frame_counters.size() != max_channels){
     setErrorString("Frame counter vector has a different dimension to the number of channels");
@@ -248,7 +261,7 @@ int LibXspressSimulator::read_frames(int max_channels, std::vector<int32_t>& fra
   }
 
   if (status == XSP_STATUS_OK){
-      LOG4CXX_DEBUG_LEVEL(0, logger_, "[SIM] num_frames_ : " << num_frames_);
+      LOG4CXX_DEBUG_LEVEL(3, logger_, "[SIM] num_frames_ : " << num_frames_);
     for (u_int32_t chan = 0; chan < max_channels; chan++) {
       frame_counters[chan] = num_frames_;
     }  
@@ -615,7 +628,7 @@ int LibXspressSimulator::histogram_circ_ack(int channel,
 int LibXspressSimulator::histogram_start(int card)
 {
   int status = XSP_STATUS_OK;
-
+  num_frames_=0;
   // Hook into the final start (card = 0)
   if (card == 0){
     // Set the number of frames to 0
@@ -652,6 +665,7 @@ int LibXspressSimulator::histogram_arm(int card)
 int LibXspressSimulator::histogram_continue(int card)
 {
   int status = XSP_STATUS_OK;
+  num_frames_++;
   /*
   int xsp_status = xsp3_histogram_continue(xsp_handle_, card);
   if (xsp_status < XSP3_OK) {
@@ -728,8 +742,8 @@ int LibXspressSimulator::calculate_dtc_factors(uint32_t *scalers,
                                              uint32_t num_chan)
 {
   for (int index = 0; index < num_chan; index++){
-    dtc_factors[index] = 0.0;
-    inp_est[index] = 0.0;
+    dtc_factors[index] = index + 1.0;
+    inp_est[index] = index - 1.0;
   }
   int status = XSP_STATUS_OK;
   /*
@@ -765,11 +779,18 @@ int LibXspressSimulator::histogram_memcpy(uint32_t *buffer,
   int thisPath, chanIdx;
   bool circ_buffer;
 
-  uint32_t local_buffer[4096];
-  for (int i = 0; i < 4096; i++){
-    local_buffer[i] = (uint32_t)((double)simulated_mca_[i] * (9.0 + rand_gen()));    
+  uint32_t *local_buffer;
+  // uint32_t local_buffer[4096];
+  for(int chan=start_chan; chan < start_chan + num_chan; chan++)
+  {
+    // for (int i = 0; i < 4096; i++){
+    //   local_buffer[i] = (uint32_t)((double)simulated_mca_[i] * (9.0 + rand_gen()));    
+    // }
+    local_buffer = (uint32_t *)(simulated_mca_);    
+    memcpy(buffer, local_buffer, 4096*sizeof(int32_t));
+    buffer+=num_eng*num_aux;
   }
-  memcpy(buffer, local_buffer, 4096*sizeof(int32_t));
+
 
   /*
   if (xsp_handle_ < 0 || xsp_handle_ >= XSP3_MAX_PATH || !Xsp3Sys[xsp_handle_].valid){
