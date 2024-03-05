@@ -66,5 +66,8 @@ configure_file(${COMMON_DIR}/include/version.h.in "${CMAKE_BINARY_DIR}/include/v
 include_directories(${CMAKE_BINARY_DIR}/include)
 
 # Add subdirectories
-add_subdirectory(${CONTROL_DIR})
+if (LIBXSPRESS)
+    add_subdirectory(${CONTROL_DIR})
+endif(LIBXSPRESS)
+
 add_subdirectory(${DATA_DIR})
