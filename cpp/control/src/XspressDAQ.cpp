@@ -24,7 +24,7 @@ namespace Xspress
  * The constructor sets up logging used within the class, and initialises
  * variables and threads for processing data.
  */
-XspressDAQ::XspressDAQ(boost::shared_ptr<ILibXspress> detector_ptr, 
+XspressDAQ::XspressDAQ(boost::shared_ptr<ILibXspress> detector_ptr,
                        uint32_t num_channels,
                        uint32_t num_spectra,
                        std::vector<std::string> endpoints):
@@ -327,7 +327,7 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
       int32_t frames_read = task->value1_;
       int32_t frames_to_read = task->value2_;
       if (frames_to_read > 0){
-        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => reading frames [" << frames_to_read << "]"); 
+        LOG4CXX_DEBUG_LEVEL(4, logger_, "workTask[" << index << "] => reading frames [" << frames_to_read << "]");
 
         uint32_t header_size = HEADER_ITEMS * sizeof(uint32_t);
         uint32_t data_size = num_spectra_ * num_channels * num_aux_data_ * sizeof(uint32_t);
@@ -419,7 +419,7 @@ void XspressDAQ::workTask(boost::shared_ptr<WorkQueue<boost::shared_ptr<XspressD
               live_scalar_7_[c_index + channel_index] = s_ptr[(c_index*9)+7];
               live_scalar_8_[c_index + channel_index] = s_ptr[(c_index*9)+8];
 
-              if (isinf(dtc_ptr[c_index]) || isnan(dtc_ptr[c_index])){
+              if (std::isinf(dtc_ptr[c_index]) || std::isnan(dtc_ptr[c_index])){
                 LOG4CXX_DEBUG_LEVEL(2, logger_, "workTask[" << index << "] DTC infinity/NaN detected, defaulting to 1.0");
                 live_dtc_[c_index + channel_index] = 1.0;
               } else {
