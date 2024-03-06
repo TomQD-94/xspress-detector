@@ -1,58 +1,66 @@
-25th October 2021
-=================
+# xspress-detector
 
-Build instructions
-==================
+This module contains the following Odin support for Xspress 3 and 4 readout systems:
 
-This module can be built as a DLS tool
+- The `XspressFrameDecoder` and `XspressProcessPlugin` for readout of MCA data
+- The `XspressListModeFrameDecoder` and `XspressListModeProcessPlugin` for readout of event
+  data, bypassing `libxspress`
+- The `xspressControl` C++ application wrapping `libxspress` and exposing a socket
+  - This includes a simulated mode for testing detector control without hardware
+- An `odin-control` adapter to control the detector via `xspressControl`
+- An xspress-specific `odin-control` adapter for `odin-data` exposing additional
+  configuration for the xspress process plugins
+- An `odin-data` meta writer plugin for handling xspress meta data from the process plugin
 
-```
-dls-checkout-module.py -a tools xspress-detector
-cd xspress-detector
-build_program -t . .
-```
+## C++ Build
 
-This will compile the C++ wrapper application and install the 
-binary into the ./prefix directory.
+The C++ build uses CMake. There are two required CMake flags to provide install
+directories containing `lib/` and `include/` directories:
 
+- `ODINDATA_ROOT_DIR`: Path to an `odin-data` install (Required)
+- `LIBXSPRESS_ROOT_DIR`: Path to `libxspress` libraries and headers (Optionally for `xspressControl`)
 
-Execution instructions
-======================
+For example:
 
-To run the application requires a control entry point and this can
-be configured with a JSON file.  
-
-Create a file called xspress.json and add the following to it
-
-```
-[
-  {
-    "ctrl_endpoint": "tcp://127.0.0.1:12000"
-  }
-]
+```bash
+mkdir -p build && cd build
+cmake -DCMAKE_INSTALL_PREFIX=... -DODINDATA_ROOT_DIR=... -DLIBXSPRESS_ROOT_DIR=... ../cpp
+make -j8 VERBOSE=1
+make install
 ```
 
-Currently to run the application requires setting LD_LIBRARY_PATH
-to point to the libxspress files, this will be updated soon.
+See the [documentation][odin-data-docs] for more information on `odin-data`.
 
-from a terminal 
+## Python Build
 
-```
-LD_LIBRARY_PATH=$(pwd)/control/libxspress-wrapper/support/ ./prefix/bin/xspressControl -d 1 -j xspress.json 
-```
+The xspress-detector python package requires [odin-control][odin-control-github] and
+[odin-data][odin-data-github], which are not on PyPI. They must be installed into a venv
+manually before installing xspress-detector. For example:
 
-You should see output similar to the following:
-
-```
-5 [0x7fead18e5b00] DEBUG Xspress.App null - Debug level set to  1
-6 [0x7fead18e5b00] INFO Xspress.App null - XspressController version -128-NOTFOUND starting up
-6 [0x7feac0545700] DEBUG Xspress.XspressController null - Running IPC thread service
-6 [0x7fead18e5b00] DEBUG Xspress.LibXspressWrapper null - Constructing LibXspressWrapper
-7 [0x7fead18e5b00] DEBUG Xspress.XspressDetector null - Constructing XspressDetector
-7 [0x7fead18e5b00] DEBUG Xspress.XspressController null - Constructing XspressController
-9 [0x7fead18e5b00] DEBUG Xspress.XspressController null - Configuration submitted: {"params":{"ctrl_endpoint":"tcp://127.0.0.1:12000"},"msg_type":"cmd","msg_val":"configure","id":0,"timestamp":"2021-10-25T11:50:36.298574"}
-9 [0x7fead18e5b00] DEBUG Xspress.XspressController null - Connecting control channel to endpoint: tcp://127.0.0.1:12000
-11 [0x7fead18e5b00] INFO Xspress.XspressController null - Running Xspress controller
+```bash
+python3 -m venv venv && source venv/bin/activate && pip install --upgrade pip
+pip install "odin-control @ git+https://git@github.com/odin-detector/odin-control.git"
+pip install "odin-data @ git+https://git@github.com/odin-detector/odin-data.git#subdirectory=python"
+pip install ./python
 ```
 
-You can run with --help to get a full list of options.
+## Examples
+
+There are example deployments in the `examples` directory. These contain the startup
+scripts and config files for a full Odin deployment for an xspress system. Any paths to
+libraries should be updated with absolute paths to installs on a specific system.
+
+These are nominally for xspress 3 and 4, however the only practical difference is the
+number of channels and by extension the number of data readout applications.
+
+## Container
+
+There is a container that is built and published in CI. However, this does not build the
+`xspressControl` application, as the `libxspress` libraries are not checked in to the
+repository. To build a container including `xspressControl`, add a directory containing
+the `libxspress` libs and headers to `xspress-detector` and uncomment the relevant lines
+of the Dockerfile to include them in the container build.
+
+[odin-control-github]: https://github.com/odin-detector/odin-control
+[odin-data-github]: https://github.com/odin-detector/odin-data
+[odin-data-docs]: https://odin-detector.github.io/odin-data/
