@@ -1,9 +1,9 @@
+# Require CMake version >=2.8
+cmake_minimum_required(VERSION 2.8)
+
 # Project name
 project(XspressDetector)
 set(SOURCE_DIR ${XspressDetector_SOURCE_DIR})
-
-# Require CMake version >=2.8
-cmake_minimum_required(VERSION 2.8)
 
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -42,6 +42,7 @@ find_package(
 find_package(LOG4CXX 0.10.0 REQUIRED)
 find_package(ZEROMQ 3.2.4 REQUIRED)
 find_package(ODINDATA REQUIRED)
+find_package(LIBXSPRESS)
 
 # Git versioning
 message("Determining xspress-detector version")
@@ -66,8 +67,11 @@ configure_file(${COMMON_DIR}/include/version.h.in "${CMAKE_BINARY_DIR}/include/v
 include_directories(${CMAKE_BINARY_DIR}/include)
 
 # Add subdirectories
-if (LIBXSPRESS)
+if (LIBXSPRESS_FOUND)
+    message("libxspress found - will build xspressControl")
     add_subdirectory(${CONTROL_DIR})
-endif(LIBXSPRESS)
+else()
+    message("libxspress not found - will not build xspressControl")
+endif(LIBXSPRESS_FOUND)
 
 add_subdirectory(${DATA_DIR})
