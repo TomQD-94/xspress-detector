@@ -1,15 +1,12 @@
 import pytest
 from xspress_detector.control.parameter_tree import (
-    GetSetValueParameter,
-    GetSetVirtualParameter,
-    GetVirtualParameter,
+    ValueParameter,
+    ReadOnlyVirtualParameter,
     ListParameter,
     NotPuttableParameterException,
     NotSettableParameterException,
-    ParameterException,
-    PutVirtualParameter,
+    WriteOnlyVirtualParameter,
     ValueParameter,
-    VirtualParameter,
     XspressParameterTree,
     bound_validator,
     is_pos,
@@ -24,7 +21,7 @@ def raise_exception(ex):
 
 @pytest.mark.asyncio
 async def test_get_virtual_parameter():
-    param = GetVirtualParameter(int, get_cb=lambda: 5)
+    param = ReadOnlyVirtualParameter(int, get_cb=lambda: 5)
     assert param.get() == 5
     with pytest.raises(NotSettableParameterException):
         param.set(-3)
@@ -34,7 +31,7 @@ async def test_get_virtual_parameter():
 @pytest.mark.asyncio
 async def test_put_virtual_parameter():
     put_callback = lambda x: 22
-    param = PutVirtualParameter(int, put_cb=put_callback, validators=[is_pos,])
+    param = WriteOnlyVirtualParameter(int, put_cb=put_callback, validators=[is_pos,])
     assert 22 == await param.put(1)
     with pytest.raises(TypeError):
         assert 1 == await param.put("hello")
@@ -87,7 +84,7 @@ async def dummy_async_callback(x):
 async def test_parameter_tree():
     _tree = {
         "a": {
-            "b": GetSetValueParameter(int, 3),
+            "b": ValueParameter(int, 3),
             "c": ListParameter(put_cb=dummy_async_callback),
             "d": {
                 "e": ValueParameter(str, "hello", put_cb=dummy_async_callback),

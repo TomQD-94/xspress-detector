@@ -1,5 +1,5 @@
 import pytest
-from xspress_control.control.util import ListModeIPPortGen
+from xspress_detector.control.util import ListModeIPPortGen
 
 
 def test_gen_special():

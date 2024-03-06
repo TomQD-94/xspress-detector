@@ -1,0 +1,30 @@
+name: Python CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Setup python
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.7
+
+      - name: Install odin dependencies
+        run: |
+          pip install "odin-control @ git+https://git@github.com/odin-detector/odin-control.git"
+          pip install "odin-data @ git+https://git@github.com/odin-detector/odin-data.git#subdirectory=python"
+
+      - name: Install xspress-detector and check version
+        run: |
+          pip install ./python[dev]
+          python -c "from xspress_detector import __version__; print(__version__)"
+
+      - name: Run tests
+        run: |
+          pytest python/tests/
