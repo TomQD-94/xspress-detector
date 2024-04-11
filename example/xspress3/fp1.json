@@ -11,7 +11,7 @@
             "load": {
                 "index": "xspress",
                 "name": "XspressProcessPlugin",
-                "library": "prefix/lib/libXspressProcessPlugin.so"
+                "library": "/usr/local/lib/libXspressProcessPlugin.so"
             }
         }
     },
@@ -20,7 +20,7 @@
             "load": {
                 "index": "xspress-list",
                 "name": "XspressListModeProcessPlugin",
-                "library": "prefix/lib/libXspressListModeProcessPlugin.so"
+                "library": "/usr/local/lib/libXspressListModeProcessPlugin.so"
             }
         }
     },
@@ -29,7 +29,7 @@
             "load": {
                 "index": "view",
                 "name": "LiveViewPlugin",
-                "library": "prefix/lib/libLiveViewPlugin.so"
+                "library": "/home/xspress3/ODIN/odin-data/xsp3_ODIN/lib/libLiveViewPlugin.so"
             }
         }
     },
@@ -38,7 +38,7 @@
             "load": {
                 "index": "blosc",
                 "name": "BloscPlugin",
-                "library": "prefix/lib/libBloscPlugin.so"
+                "library": "/home/xspress3/ODIN/odin-data/xsp3_ODIN/lib/libBloscPlugin.so"
             }
         }
     },
@@ -47,7 +47,7 @@
             "load": {
                 "index": "hdf",
                 "name": "FileWriterPlugin",
-                "library": "prefix/lib/libHdf5Plugin.so"
+                "library": "/home/xspress3/ODIN/odin-data/xsp3_ODIN/lib/libHdf5Plugin.so"
             }
         }
     },
